@@ -68,24 +68,45 @@ endif
 mousepad_so_version = '0'
 mousepad_version = '@0@.0.0'.format(mousepad_so_version)
 
-libmousepad = library(
-  'mousepad',
-  libmousepad_sources,
-  sources: xfce_revision_h,
-  version: mousepad_version,
-  soversion: mousepad_so_version,
-  c_args: c_args,
-  include_directories: [
-    include_directories('..'),
-  ],
-  dependencies: [
-    glib,
-    gmodule,
-    gtk,
-    gtksourceview,
-  ],
-  install: true,
-)
+if host_machine.system() == 'windows'
+  # Building a DLL here requires exported symbols and an import library.
+  # Use a static library for Windows to keep linking straightforward.
+  libmousepad = static_library(
+    'mousepad',
+    libmousepad_sources,
+    sources: xfce_revision_h,
+    c_args: c_args,
+    include_directories: [
+      include_directories('..'),
+    ],
+    dependencies: [
+      glib,
+      gmodule,
+      gtk,
+      gtksourceview,
+    ],
+    install: false,
+  )
+else
+  libmousepad = library(
+    'mousepad',
+    libmousepad_sources,
+    sources: xfce_revision_h,
+    version: mousepad_version,
+    soversion: mousepad_so_version,
+    c_args: c_args,
+    include_directories: [
+      include_directories('..'),
+    ],
+    dependencies: [
+      glib,
+      gmodule,
+      gtk,
+      gtksourceview,
+    ],
+    install: true,
+  )
+endif
 
 if host_machine.system() == 'linux'
   libmousepad.link_with(libm)
