@@ -22,6 +22,7 @@ You also need:
 - GTK3 development libraries for Windows
 - GtkSourceView development libraries for Windows
 - `pkg-config` or `pkgconf` (with `.pc` files for the above libs)
+- GNU gettext tools with XML ITS data (for appdata translation merge)
 
 ## Fast path (MSVC)
 
@@ -72,6 +73,18 @@ Bootstrap with prebuilt prefix:
 ./build-aux/windows/bootstrap.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk
 ./build-aux/windows/2-compile.ps1 -BuildDir build-msvc
 ```
+
+If gettext tools are installed outside your GTK prefix (for example via
+`winget install mlocati.GetText`), pass `-GettextPrefix`:
+
+```powershell
+./build-aux/windows/bootstrap.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk -GettextPrefix "$env:LOCALAPPDATA/Programs/gettext-iconv"
+./build-aux/windows/1-configure-no-xfce-prebuilt.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk -GettextPrefix "$env:LOCALAPPDATA/Programs/gettext-iconv"
+```
+
+The scripts create a local gettext overlay at `build-aux/windows/.gettext-overlay`
+to provide AppStream locating rules required by `msgfmt` for
+`*.appdata.xml.in` files.
 
 That helper exports:
 
