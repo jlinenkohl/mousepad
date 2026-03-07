@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(dirname "$0")
+build_dir=${1:-build-msvc}
+native_file=${2:-$script_dir/msvc-gtk.native.ini}
+
+meson setup "$build_dir" \
+  --native-file "$native_file" \
+  -Dshortcuts-plugin=disabled \
+  -Dgspell-plugin=disabled \
+  -Dpolkit=disabled \
+  -Dtest-plugin=disabled \
+  -Dkeyfile-settings=true

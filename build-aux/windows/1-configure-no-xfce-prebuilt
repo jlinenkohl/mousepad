@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(dirname "$0")
+build_dir=${1:-build-msvc}
+gtk_prefix=${2:-}
+native_file=${3:-$script_dir/msvc-gtk.native.ini}
+
+if [ -z "$gtk_prefix" ]; then
+  echo "Usage: $0 [build-dir] <gtk-prefix> [native-file]" >&2
+  echo "Example: $0 build-msvc C:/gtk" >&2
+  exit 1
+fi
+
+pc_path="$gtk_prefix/lib/pkgconfig:$gtk_prefix/share/pkgconfig"
+if [ -n "${PKG_CONFIG_PATH:-}" ]; then
+  export PKG_CONFIG_PATH="$pc_path:$PKG_CONFIG_PATH"
+else
+  export PKG_CONFIG_PATH="$pc_path"
+fi
+
+if [ -n "${PATH:-}" ]; then
+  export PATH="$gtk_prefix/bin:$PATH"
+else
+  export PATH="$gtk_prefix/bin"
+fi
+
+exec "$script_dir/1-configure-no-xfce" "$build_dir" "$native_file"
