@@ -2,6 +2,10 @@
 
 This directory is a fast-start path for building Mousepad for Windows while removing XFCE-specific runtime dependencies.
 
+For a complete step-by-step setup on a vanilla Windows machine, see:
+
+- `build-aux/windows/WINDOWS-SETUP.md`
+
 ## What this config disables
 
 - `shortcuts-plugin` (depends on `libxfce4ui` / `libxfce4kbd-private`)
