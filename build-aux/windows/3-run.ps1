@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $exePath = Join-Path $repoRoot "$BuildDir\mousepad\mousepad.exe"
 $exeDir = Split-Path -Parent $exePath
+$pluginDir = Join-Path $repoRoot "$BuildDir\plugins"
 
 if (-not (Test-Path $exePath)) {
   throw "Executable not found at '$exePath'. Run build-aux/windows/2-compile.ps1 first."
@@ -25,6 +26,10 @@ $env:Path = "$gtkBin;$env:Path"
 
 if ($GettextPrefix -and (Test-Path (Join-Path $GettextPrefix 'bin'))) {
   $env:Path = "$(Join-Path $GettextPrefix 'bin');$env:Path"
+}
+
+if (Test-Path $pluginDir) {
+  $env:MOUSEPAD_PLUGIN_DIRECTORY = $pluginDir
 }
 
 $schemaSrc = Join-Path $repoRoot 'mousepad\org.xfce.mousepad.gschema.xml'

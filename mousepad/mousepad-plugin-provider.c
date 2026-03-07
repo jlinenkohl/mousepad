@@ -104,14 +104,31 @@ mousepad_plugin_provider_finalize (GObject *object)
 
 
 
+static const gchar *
+mousepad_plugin_provider_get_plugin_directory (void)
+{
+  const gchar *plugin_dir;
+
+  plugin_dir = g_getenv ("MOUSEPAD_PLUGIN_DIRECTORY");
+  if (plugin_dir != NULL && *plugin_dir != '\0')
+    return plugin_dir;
+
+  return MOUSEPAD_PLUGIN_DIRECTORY;
+}
+
+
+
 static gboolean
 mousepad_plugin_provider_load (GTypeModule *type_module)
 {
   MousepadPluginProvider *provider = MOUSEPAD_PLUGIN_PROVIDER (type_module);
+  const gchar *plugin_dir;
   gchar *path;
 
+  plugin_dir = mousepad_plugin_provider_get_plugin_directory ();
+
   /* load the module */
-  path = g_module_build_path (MOUSEPAD_PLUGIN_DIRECTORY, type_module->name);
+  path = g_module_build_path (plugin_dir, type_module->name);
   provider->module = g_module_open (path, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
   g_free (path);
 

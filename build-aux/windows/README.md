@@ -99,6 +99,8 @@ For runtime from a non-developer shell, use:
 
 The run helper prepares `PATH` for GTK runtime DLLs and compiles/uses a local
 GSettings schema cache for non-installed development runs.
+It also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins` when present,
+so plugin discovery is relative to the build output during development runs.
 
 That helper exports:
 

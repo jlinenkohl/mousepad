@@ -781,6 +781,20 @@ mousepad_application_sort_plugins (gconstpointer a,
 
 
 
+static const gchar *
+mousepad_application_get_plugin_directory (void)
+{
+  const gchar *plugin_dir;
+
+  plugin_dir = g_getenv ("MOUSEPAD_PLUGIN_DIRECTORY");
+  if (plugin_dir != NULL && *plugin_dir != '\0')
+    return plugin_dir;
+
+  return MOUSEPAD_PLUGIN_DIRECTORY;
+}
+
+
+
 static void
 mousepad_application_load_plugins (MousepadApplication *application)
 {
@@ -789,23 +803,26 @@ mousepad_application_load_plugins (MousepadApplication *application)
   GError *error = NULL;
   GDir *dir;
   const gchar *basename;
+  const gchar *plugin_dir;
   gchar *provider_name, *schema_id;
   gchar **strs;
   gsize n_strs;
+
+  plugin_dir = mousepad_application_get_plugin_directory ();
 
   if (!g_module_supported ())
     {
       g_warning ("Dynamic type loading is not supported on this system");
       return;
     }
-  else if ((dir = g_dir_open (MOUSEPAD_PLUGIN_DIRECTORY, 0, &error)) == NULL)
+  else if ((dir = g_dir_open (plugin_dir, 0, &error)) == NULL)
     {
       /* the plugin directory may not exist (compilation without plugin) */
       if (g_error_matches (error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
-        g_message ("Plugin directory '%s' not found", MOUSEPAD_PLUGIN_DIRECTORY);
+        g_message ("Plugin directory '%s' not found", plugin_dir);
       else
         g_warning ("Failed to open plugin directory '%s': %s",
-                   MOUSEPAD_PLUGIN_DIRECTORY, error->message);
+                   plugin_dir, error->message);
 
       return;
     }

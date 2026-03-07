@@ -102,6 +102,8 @@ If gettext is not in the default winget location, pass it explicitly:
 If launching `mousepad.exe` directly returns `-1073741515` (`0xC0000135`),
 Windows cannot find one or more runtime DLLs. Use `3-run.ps1` so the GTK
 runtime path and development schema cache are prepared automatically.
+The launcher also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins`
+when present, avoiding hardcoded install-prefix plugin paths during dev runs.
 
 ## 5. Quick Environment Verification
 
