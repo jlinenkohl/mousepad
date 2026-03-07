@@ -23,6 +23,22 @@
 #include "mousepad-view.h"
 #include "mousepad-window.h"
 
+#ifndef G_OS_WIN32
+#include <unistd.h>
+#endif
+
+
+
+static gboolean
+mousepad_user_is_root (void)
+{
+#ifdef G_OS_WIN32
+  return FALSE;
+#else
+  return geteuid () == 0;
+#endif
+}
+
 
 
 static void
@@ -475,7 +491,8 @@ mousepad_document_location_changed (MousepadDocument *document,
   utf8_filename = mousepad_util_get_display_path (file);
 
   /* create a shorter display filename: replace $HOME with a tilde if user is not root */
-  if (geteuid () && (home = g_get_home_dir ()) && (home_len = strlen (home))
+  if (!mousepad_user_is_root ()
+      && (home = g_get_home_dir ()) && (home_len = strlen (home))
       && g_str_has_prefix (utf8_filename, home))
     {
       utf8_short_filename = g_strconcat ("~", utf8_filename + home_len, NULL);

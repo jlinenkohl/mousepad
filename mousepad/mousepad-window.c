@@ -29,6 +29,22 @@
 #include "mousepad-util.h"
 #include "mousepad-window.h"
 
+#ifndef G_OS_WIN32
+#include <unistd.h>
+#endif
+
+
+
+static gboolean
+mousepad_user_is_root (void)
+{
+#ifdef G_OS_WIN32
+  return FALSE;
+#else
+  return geteuid () == 0;
+#endif
+}
+
 
 
 #define PADDING 2
@@ -1145,7 +1161,7 @@ static void
 mousepad_window_create_root_warning (MousepadWindow *window)
 {
   /* check if we need to add the root warning */
-  if (G_UNLIKELY (geteuid () == 0))
+  if (G_UNLIKELY (mousepad_user_is_root ()))
     {
       GtkWidget *ebox, *label, *separator;
       GtkCssProvider *provider;
