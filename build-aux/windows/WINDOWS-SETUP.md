@@ -8,6 +8,15 @@ This guide is for building Mousepad on Windows with:
 
 It assumes a fresh Windows machine with only VS Code installed.
 
+## vcpkg Status (Current)
+
+`vcpkg` is currently not used by this repository's Windows build flow.
+
+- The build scripts rely on Meson + `pkg-config` and a prebuilt GTK prefix.
+- No `vcpkg` toolchain or manifest integration is wired into the current scripts.
+- Installing `vcpkg` is fine, but it is optional for this specific setup unless you
+	decide to rework dependency management around it.
+
 ## 1. Install Required Tools
 
 Run these in an elevated PowerShell terminal:
@@ -44,6 +53,18 @@ Expected layout example:
 - `Q:\gtk3\include`
 - `Q:\gtk3\lib\pkgconfig`
 - `Q:\gtk3\share\pkgconfig`
+
+Recommended sources for GTK binaries and dependency context:
+- gvsbuild release zips (GTK3/GTK4 prebuilt libraries):
+	`https://github.com/wingtk/gvsbuild/releases/tag/2026.2.0`
+- Additional GTK dependency build notes/files (MSVC):
+	`https://github.com/fanc999/gtk-deps-msvc/tree/main`
+- gvsbuild project (build GTK stack from source):
+	`https://github.com/wingtk/gvsbuild?tab=readme-ov-file`
+- MSYS2 reference (commonly needed when building stack from source):
+	`https://www.msys2.org/`
+- GNOME Win32/MSVC GTK stack errata and references:
+	`https://wiki.gnome.org/Projects/GTK/Win32/MSVCCompilationOfGTKStack`
 
 ## 3. Clone and Open Repo
 
@@ -106,3 +127,10 @@ To keep Windows changes as a thin layover:
 4. Keep core-source portability patches in small, focused commits.
 
 This minimizes rework when upstream moves.
+
+## 8. Notes For Future Contributors
+
+- Prefer Windows-specific changes under `build-aux/windows/` when possible.
+- Keep source portability fixes as small, focused commits to ease upstream merges.
+- If you later adopt `vcpkg`, add explicit script support (toolchain/env wiring)
+	so setup remains deterministic for new contributors.
