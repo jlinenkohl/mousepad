@@ -989,13 +989,12 @@ mousepad_history_search_resize (GHashTable *history,
 {
   GHashTableIter iter;
   gpointer key, value;
-
-  /* allocated on the stack for simplicity, the maximum size is set to a reasonable
-   * value in org.xfce.mousepad.gschema.xml */
-  const gchar *strv[size + 1];
+  const gchar **strv;
 
   if (size >= g_hash_table_size (history))
     return;
+
+  strv = g_new0 (const gchar *, size + 1);
 
   g_hash_table_iter_init (&iter, history);
   while (g_hash_table_iter_next (&iter, &key, &value))
@@ -1007,6 +1006,7 @@ mousepad_history_search_resize (GHashTable *history,
   /* update history stored in the settings */
   strv[size] = NULL;
   mousepad_setting_set_strv (setting, strv);
+  g_free (strv);
 }
 
 
@@ -1156,10 +1156,9 @@ mousepad_history_search_insert_text (const gchar *text,
   else
     {
       guint size = MOUSEPAD_SETTING_GET_UINT (SEARCH_HISTORY_SIZE);
+      const gchar **strv;
 
-      /* allocated on the stack for speed, the maximum size is set to a reasonable
-       * value in org.xfce.mousepad.gschema.xml */
-      const gchar *strv[size + 1];
+      strv = g_new0 (const gchar *, size + 1);
 
       if (contains)
         {
@@ -1209,6 +1208,7 @@ mousepad_history_search_insert_text (const gchar *text,
       strv[0] = text;
       strv[size] = NULL;
       mousepad_setting_set_strv (setting, strv);
+      g_free (strv);
 
       return max_idx;
     }
