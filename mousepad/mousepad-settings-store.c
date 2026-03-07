@@ -17,6 +17,10 @@
 #include "mousepad-private.h"
 #include "mousepad-settings-store.h"
 
+#ifdef G_OS_WIN32
+#include <glib/gwin32.h>
+#endif
+
 
 
 #ifdef MOUSEPAD_SETTINGS_KEYFILE_BACKEND
@@ -87,25 +91,65 @@ mousepad_setting_key_free (gpointer data)
 static void
 mousepad_settings_store_update_env (void)
 {
-  const gchar *old_value = g_getenv ("GSETTINGS_SCHEMA_DIR");
+  const gchar *old_value;
+  GPtrArray *paths;
   gchar *new_value = NULL;
 
-  /* append to path */
-  if (old_value != NULL)
-    {
-      gchar **paths = g_strsplit (old_value, G_SEARCHPATH_SEPARATOR_S, 0);
-      gsize len = g_strv_length (paths) + 1;
+#ifdef G_OS_WIN32
+  gchar *install_dir;
+  gchar *schema_dir;
+#endif
 
-      paths = g_renew (gchar *, paths, len + 1);
-      paths[len - 1] = g_strdup (MOUSEPAD_GSETTINGS_SCHEMA_DIR);
-      paths[len] = NULL;
-      new_value = g_strjoinv (G_SEARCHPATH_SEPARATOR_S, paths);
-      g_strfreev (paths);
+  old_value = g_getenv ("GSETTINGS_SCHEMA_DIR");
+  paths = g_ptr_array_new_with_free_func (g_free);
+
+  if (old_value != NULL && *old_value != '\0')
+    {
+      gchar **old_paths;
+      gchar **iter;
+
+      old_paths = g_strsplit (old_value, G_SEARCHPATH_SEPARATOR_S, 0);
+      for (iter = old_paths; iter != NULL && *iter != NULL; iter++)
+        if (**iter != '\0')
+          g_ptr_array_add (paths, g_strdup (*iter));
+
+      g_strfreev (old_paths);
     }
 
-  /* set new path */
-  if (new_value == NULL)
-    new_value = g_strdup (MOUSEPAD_GSETTINGS_SCHEMA_DIR);
+  g_ptr_array_add (paths, g_strdup (MOUSEPAD_GSETTINGS_SCHEMA_DIR));
+
+#ifdef G_OS_WIN32
+  install_dir = g_win32_get_package_installation_directory_of_module (NULL);
+  if (install_dir != NULL)
+    {
+      /* Installed layout fallback: <bindir>/../share/glib-2.0/schemas */
+      schema_dir = g_build_filename (install_dir, "..", "share", "glib-2.0", "schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      /* Development layout fallback: <builddir>/runtime-schemas */
+      schema_dir = g_build_filename (install_dir, "..", "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      /* Alternate fallback: <bindir>/runtime-schemas */
+      schema_dir = g_build_filename (install_dir, "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      g_free (install_dir);
+    }
+#endif
+
+  g_ptr_array_add (paths, NULL);
+  new_value = g_strjoinv (G_SEARCHPATH_SEPARATOR_S, (gchar **) paths->pdata);
+  g_ptr_array_free (paths, TRUE);
 
   g_setenv ("GSETTINGS_SCHEMA_DIR", new_value, TRUE);
   g_free (new_value);

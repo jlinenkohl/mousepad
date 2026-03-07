@@ -52,6 +52,9 @@ From Developer PowerShell:
 ./build-aux/windows/3-run.ps1 -BuildDir build-msvc
 ```
 
+`2-compile.ps1` also generates a local schema cache in
+`<builddir>/runtime-schemas` for development execution on Windows.
+
 The native file used is:
 
 - `build-aux/windows/msvc-gtk.native.ini`
@@ -101,6 +104,15 @@ The run helper prepares `PATH` for GTK runtime DLLs and compiles/uses a local
 GSettings schema cache for non-installed development runs.
 It also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins` when present,
 so plugin discovery is relative to the build output during development runs.
+
+To make direct `mousepad.exe` launches work from plain shells, stage runtime
+DLLs next to the executable:
+
+```powershell
+./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk
+```
+
+This creates `build-msvc/mousepad/run-mousepad.cmd` for self-contained launch.
 
 That helper exports:
 

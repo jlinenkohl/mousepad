@@ -105,6 +105,22 @@ runtime path and development schema cache are prepared automatically.
 The launcher also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins`
 when present, avoiding hardcoded install-prefix plugin paths during dev runs.
 
+For direct launches outside helper scripts, stage app-local runtime DLLs:
+
+```powershell
+./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
+```
+
+Then run:
+
+```powershell
+./build-msvc/mousepad/run-mousepad.cmd
+```
+
+`2-compile.ps1` generates `<builddir>/runtime-schemas` automatically, and the
+Windows runtime path now falls back to that directory for GSettings schema
+discovery during non-installed development runs.
+
 ## 5. Quick Environment Verification
 
 Run before configure if troubleshooting:
