@@ -82,6 +82,7 @@ Use the provided Windows scripts. They now handle gettext/AppStream XML rule set
 ```powershell
 ./build-aux/windows/1-configure-no-xfce-prebuilt.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
 ./build-aux/windows/2-compile.ps1 -BuildDir build-msvc
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
 ```
 
 Or bootstrap first:
@@ -89,6 +90,7 @@ Or bootstrap first:
 ```powershell
 ./build-aux/windows/bootstrap.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
 ./build-aux/windows/2-compile.ps1 -BuildDir build-msvc
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
 ```
 
 If gettext is not in the default winget location, pass it explicitly:
@@ -96,6 +98,10 @@ If gettext is not in the default winget location, pass it explicitly:
 ```powershell
 ./build-aux/windows/bootstrap.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3 -GettextPrefix "C:\path\to\gettext-prefix"
 ```
+
+If launching `mousepad.exe` directly returns `-1073741515` (`0xC0000135`),
+Windows cannot find one or more runtime DLLs. Use `3-run.ps1` so the GTK
+runtime path and development schema cache are prepared automatically.
 
 ## 5. Quick Environment Verification
 

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+build_dir=${1:-build-msvc}
+
+pwsh -File "$(dirname "$0")/3-run.ps1" -BuildDir "$build_dir"

@@ -49,6 +49,7 @@ From Developer PowerShell:
 ```powershell
 ./build-aux/windows/1-configure-no-xfce.ps1
 ./build-aux/windows/2-compile.ps1 -BuildDir build-msvc
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc
 ```
 
 The native file used is:
@@ -89,6 +90,15 @@ If gettext tools are installed outside your GTK prefix (for example via
 The scripts create a local gettext overlay at `build-aux/windows/.gettext-overlay`
 to provide AppStream locating rules required by `msgfmt` for
 `*.appdata.xml.in` files.
+
+For runtime from a non-developer shell, use:
+
+```powershell
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk
+```
+
+The run helper prepares `PATH` for GTK runtime DLLs and compiles/uses a local
+GSettings schema cache for non-installed development runs.
 
 That helper exports:
 
