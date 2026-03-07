@@ -1,10 +1,10 @@
 # Copilot Working Context: Mousepad Windows Port (MSVC + Meson + Ninja + GTK3)
 
 ## Repository + Branch
-- Active git repo: `Q:\projects\mousepad-git`
+- Active git repo: `Q:\projects\mousepad`
 - Branch: `dev/windows-gtk3`
 - Fork origin cloned from: `https://github.com/jlinenkohl/mousepad`
-- Legacy unzipped workspace preserved at: `Q:\projects\mousepad`
+- Backup mirror clone available at: `Q:\projects\mousepad-git`
 
 ## Goal
 Build Mousepad (GTK3 app) on Windows with MSVC, Meson, Ninja, and prebuilt GTK libraries, while avoiding XFCE runtime dependencies where possible.
@@ -42,5 +42,5 @@ Running `./build-aux/windows/2-compile.ps1 -BuildDir build-msvc` exposed these b
 4. Re-run compile and capture the next failing stage.
 
 ## Notes for Future Sessions
-- Keep `Q:\projects\mousepad` intact as the preserved pre-git snapshot source.
-- Continue work in `Q:\projects\mousepad-git` on branch `dev/windows-gtk3`.
+- Use `Q:\projects\mousepad` as the canonical working repository on branch `dev/windows-gtk3`.
+- `Q:\projects\mousepad-git` can be retained as a backup mirror or removed later if not needed.
