@@ -83,10 +83,13 @@ libmousepad = library(
     gmodule,
     gtk,
     gtksourceview,
-    libm,
   ],
   install: true,
 )
+
+if host_machine.system() == 'linux'
+  libmousepad.link_with(libm)
+endif
 
 executable(
   'mousepad',

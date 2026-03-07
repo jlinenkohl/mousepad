@@ -7,6 +7,8 @@ version : '0.7.0-dev',
   default_options : ['c_std=gnu11', 'buildtype=debugoptimized', 'warning_level=2']
 )
 
+os_type = host_machine.system()
+
 project_namespace = 'apps'
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 copyright_year = '2026'
@@ -93,7 +95,18 @@ foreach header : headers
   endif
 endforeach
 
-libm = cc.find_library('m', required: true)
+if os_type == 'windows'
+  # Windows-specific code
+  message('Configuring for Windows')
+#  add_global_link_arguments(['-lws2_32'], language : 'c')
+#elif os_type == 'darwin'
+  # macOS-specific code
+#  message('Configuring for macOS')
+elif os_type == 'linux'
+  # Linux-specific code
+  message('Configuring for Linux')
+  libm = cc.find_library('m', required: true)
+endif
 
 extra_cflags = []
 extra_cflags_check = [
