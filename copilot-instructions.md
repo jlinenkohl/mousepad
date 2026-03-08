@@ -1,46 +1,45 @@
-# Copilot Working Context: Mousepad Windows Port (MSVC + Meson + Ninja + GTK3)
+# Copilot Working Context: Mousepad Fork Maintenance Policy
 
-## Repository + Branch
-- Active git repo: `Q:\projects\mousepad`
-- Branch: `dev/windows-gtk3`
-- Fork origin cloned from: `https://github.com/jlinenkohl/mousepad`
-- Backup mirror clone available at: `Q:\projects\mousepad-git`
+## Primary Objective
+Keep this fork as close as possible to upstream Mousepad while extending support and features in a way that remains upstream-friendly.
 
-## Goal
-Build Mousepad (GTK3 app) on Windows with MSVC, Meson, Ninja, and prebuilt GTK libraries, while avoiding XFCE runtime dependencies where possible.
+## Guiding Principles
+- Upstream-first: prefer fixes/implementations that can work on Linux/Xfce GTK builds too, not Windows-only behavior.
+- Least disruptive: avoid broad re-architecture of core Mousepad code paths when a localized change is sufficient.
+- Isolate intent: each change should be clearly classifiable as one of:
+	- `bugfix:` existing bug fix (upstream candidate)
+	- `feat:` new feature (upstream candidate if generic)
+	- `windows-only:` Windows/MSVC/runtime glue only
+- Keep platform glue contained to `build-aux/windows/*` and narrow `#ifdef G_OS_WIN32` sections.
 
-## Windows Build Scripts
-- `build-aux/windows/1-configure-no-xfce.ps1`
-- `build-aux/windows/1-configure-no-xfce-prebuilt.ps1`
-- `build-aux/windows/2-compile.ps1`
-- `build-aux/windows/bootstrap.ps1`
-- Native file: `build-aux/windows/msvc-gtk.native.ini`
+## Branch + Commit Strategy
+- Use short-lived topic branches from `dev/windows-gtk3`:
+	- `bugfix/<topic>`
+	- `feat/<topic>`
+	- `windows/<topic>`
+- Keep commits single-purpose and small.
+- Prefer commit subjects with explicit taxonomy prefix:
+	- `bugfix: ...`
+	- `feat: ...`
+	- `windows-only: ...`
+- Do not mix unrelated categories in one commit.
 
-## Current Build Status (from prior run)
-Running `./build-aux/windows/2-compile.ps1 -BuildDir build-msvc` exposed these blockers:
+## Reviewability Rules
+- Every patch should answer:
+	1. Is this upstream-candidate or Windows-only?
+	2. What files carry the change and why those files only?
+	3. What regression risk exists for upstream Linux/Xfce behavior?
+- For nontrivial behavior changes, keep logic behind explicit mode/setting flags.
 
-1. `msgfmt` ITS rules error:
-- During `org.xfce.mousepad.appdata.xml` merge, `msgfmt` reported it cannot locate ITS rules.
-- This is an i18n/gettext packaging issue on Windows, not an XFCE runtime dependency issue.
+## Rebase / Upstream Sync Hygiene
+- Regularly rebase `dev/windows-gtk3` onto upstream/master equivalent.
+- Keep Windows-only commits grouped and easy to drop/cherry-pick.
+- Avoid formatting-only churn in functional commits.
 
-2. MSVC C VLA incompatibility:
-- `mousepad/mousepad-history.c` uses variable-length arrays at lines around 995 and 1162.
-- MSVC rejects VLAs (`C2057/C2466/C2133`).
+## Current Practical Notes
+- Windows startup may emit DBus helper warnings when session DBus binaries are absent; avoid introducing hard DBus dependencies.
+- Runtime/plugin path issues and staged DLL behavior belong in `build-aux/windows/*` and should not leak into generic app logic unless necessary.
 
-3. POSIX uid checks on Windows:
-- `geteuid()` references in `mousepad/mousepad-document.c` and `mousepad/mousepad-window.c` were observed.
-- This may need Windows guards or fallback behavior.
-
-## Verified Context
-- No-XFCE configure path disables optional dependencies via Meson options (`shortcuts-plugin`, `gspell-plugin`, `polkit`, `test-plugin`).
-- Existing in-progress source edits include Meson changes to only use/link `libm` on Linux.
-
-## Immediate Next Technical Steps
-1. Replace VLA usage in `mousepad-history.c` with MSVC-safe allocation.
-2. Gate or adjust appdata XML merge on Windows if ITS is unavailable.
-3. Add Windows-safe guards/fallbacks around `geteuid()` usage.
-4. Re-run compile and capture the next failing stage.
-
-## Notes for Future Sessions
-- Use `Q:\projects\mousepad` as the canonical working repository on branch `dev/windows-gtk3`.
-- `Q:\projects\mousepad-git` can be retained as a backup mirror or removed later if not needed.
+## Working Repository
+- Canonical repo path: `Q:\projects\mousepad`
+- Active integration branch: `dev/windows-gtk3`

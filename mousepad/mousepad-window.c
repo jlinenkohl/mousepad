@@ -226,6 +226,10 @@ mousepad_window_overwrite_changed (MousepadDocument *document,
                                    gboolean overwrite,
                                    MousepadWindow *window);
 static void
+mousepad_window_column_mode_changed (MousepadWindow *window,
+                                     const gchar *key,
+                                     GSettings *settings);
+static void
 mousepad_window_can_undo (GtkSourceBuffer *buffer,
                           GParamSpec *unused,
                           MousepadWindow *window);
@@ -1274,6 +1278,17 @@ mousepad_window_action_statusbar_overwrite (MousepadWindow *window,
 
 
 static void
+mousepad_window_action_statusbar_column_mode (MousepadWindow *window,
+                                              gboolean enabled)
+{
+  g_return_if_fail (MOUSEPAD_IS_WINDOW (window));
+
+  mousepad_setting_set_boolean (MOUSEPAD_SETTING_COLUMN_MODE, enabled);
+}
+
+
+
+static void
 mousepad_window_create_statusbar (MousepadWindow *window)
 {
   /* setup a new statusbar */
@@ -1301,6 +1316,9 @@ mousepad_window_create_statusbar (MousepadWindow *window)
   g_signal_connect_swapped (window->statusbar, "enable-overwrite",
                             G_CALLBACK (mousepad_window_action_statusbar_overwrite), window);
 
+  g_signal_connect_swapped (window->statusbar, "enable-column-mode",
+                            G_CALLBACK (mousepad_window_action_statusbar_column_mode), window);
+
   /* connect to some signals to keep in sync */
   MOUSEPAD_SETTING_CONNECT_OBJECT (STATUSBAR_VISIBLE, mousepad_window_update_bar_visibility,
                                    window, G_CONNECT_SWAPPED);
@@ -1308,6 +1326,13 @@ mousepad_window_create_statusbar (MousepadWindow *window)
   MOUSEPAD_SETTING_CONNECT_OBJECT (STATUSBAR_VISIBLE_FULLSCREEN,
                                    mousepad_window_update_bar_visibility,
                                    window, G_CONNECT_SWAPPED);
+
+  MOUSEPAD_SETTING_CONNECT_OBJECT (COLUMN_MODE,
+                                   mousepad_window_column_mode_changed,
+                                   window,
+                                   G_CONNECT_SWAPPED);
+
+  mousepad_window_column_mode_changed (window, NULL, NULL);
 }
 
 
@@ -3470,6 +3495,24 @@ mousepad_window_overwrite_changed (MousepadDocument *document,
   /* set the new overwrite mode in the statusbar */
   if (window->statusbar && window->active == document)
     mousepad_statusbar_set_overwrite (MOUSEPAD_STATUSBAR (window->statusbar), overwrite);
+}
+
+
+
+static void
+mousepad_window_column_mode_changed (MousepadWindow *window,
+                                     const gchar *key,
+                                     GSettings *settings)
+{
+  gboolean enabled;
+
+  g_return_if_fail (MOUSEPAD_IS_WINDOW (window));
+
+  if (window->statusbar == NULL)
+    return;
+
+  enabled = MOUSEPAD_SETTING_GET_BOOLEAN (COLUMN_MODE);
+  mousepad_statusbar_set_column_mode (MOUSEPAD_STATUSBAR (window->statusbar), enabled);
 }
 
 

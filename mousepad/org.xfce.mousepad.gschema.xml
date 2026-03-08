@@ -287,6 +287,13 @@
         no syntax highlighting.
       </description>
     </key>
+    <key name="column-mode" type="b">
+      <default>false</default>
+      <summary>Column mode</summary>
+      <description>
+        When true, enable experimental rectangular selection and editing mode.
+      </description>
+    </key>
   </schema>
 
   <schema id="org.xfce.mousepad.preferences.view.show-whitespace" path="/org/xfce/mousepad/preferences/view/show-whitespace/">

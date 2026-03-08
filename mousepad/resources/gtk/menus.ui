@@ -210,6 +210,11 @@
           <attribute name="tooltip" translatable="yes">Show line numbers</attribute>
           <attribute name="action">app.preferences.view.show-line-numbers</attribute>
         </item>
+        <item>
+          <attribute name="label" translatable="yes">_Column Mode</attribute>
+          <attribute name="tooltip" translatable="yes">Toggle experimental rectangular selection/editing mode</attribute>
+          <attribute name="action">app.preferences.view.column-mode</attribute>
+        </item>
       </section>
       <section>
         <item>

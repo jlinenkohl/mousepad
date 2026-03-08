@@ -53,6 +53,7 @@ G_BEGIN_DECLS
 #define MOUSEPAD_SETTING_WORD_WRAP "preferences.view.word-wrap"
 #define MOUSEPAD_SETTING_MATCH_BRACES "preferences.view.match-braces"
 #define MOUSEPAD_SETTING_COLOR_SCHEME "preferences.view.color-scheme"
+#define MOUSEPAD_SETTING_COLUMN_MODE "preferences.view.column-mode"
 
 #define MOUSEPAD_SETTING_TOOLBAR_STYLE "preferences.window.toolbar-style"
 #define MOUSEPAD_SETTING_TOOLBAR_ICON_SIZE "preferences.window.toolbar-icon-size"

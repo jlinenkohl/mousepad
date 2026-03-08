@@ -250,6 +250,7 @@ static const GActionEntry dialog_actions[] = {
   { MOUSEPAD_SETTING_HIGHLIGHT_CURRENT_LINE, mousepad_application_toggle_activate, NULL, "false", NULL },
   { MOUSEPAD_SETTING_MATCH_BRACES, mousepad_application_toggle_activate, NULL, "false", NULL },
   { MOUSEPAD_SETTING_WORD_WRAP, mousepad_application_toggle_activate, NULL, "false", NULL },
+  { MOUSEPAD_SETTING_COLUMN_MODE, mousepad_application_toggle_activate, NULL, "false", NULL },
   { MOUSEPAD_SETTING_USE_DEFAULT_FONT, mousepad_application_toggle_activate, NULL, "false", NULL },
   { MOUSEPAD_SETTING_COLOR_SCHEME, mousepad_application_radio_activate, "s", "'none'", NULL },
 
@@ -914,6 +915,7 @@ mousepad_application_set_accels (MousepadApplication *application)
     /* "View" menu */
     { "win.preferences.window.menubar-visible", "<Control>M" },
     { "win.view.fullscreen", "F11" },
+    { "app.preferences.view.column-mode", "<Alt><Shift>C" },
 
     /* "Document" menu */
     { "win.document.previous-tab", "<Control>Page_Up" },
