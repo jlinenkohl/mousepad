@@ -218,6 +218,12 @@ mousepad_settings_store_add_settings (MousepadSettingsStore *self,
 
   /* loop through keys in schema and store mapping of their setting name to GSettings */
   schema = g_settings_schema_source_lookup (source, schema_id, TRUE);
+  if (G_UNLIKELY (schema == NULL))
+    {
+      g_warning ("Failed to load GSettings schema '%s'", schema_id);
+      return;
+    }
+
   keys = g_settings_schema_list_keys (schema);
   prefix = schema_id + MOUSEPAD_ID_LEN + 1;
   for (key = keys; key && *key; key++)
@@ -282,6 +288,12 @@ mousepad_settings_store_add_root (MousepadSettingsStore *self,
   GSettings *root;
 
   source = g_settings_schema_source_get_default ();
+  if (G_UNLIKELY (source == NULL))
+    {
+      g_warning ("No default GSettings schema source is available");
+      return;
+    }
+
   schema = g_settings_schema_source_lookup (source, schema_id, TRUE);
 
   /* exit silently if no schema is found: plugins may have settings or not */

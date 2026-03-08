@@ -110,6 +110,9 @@ mousepad_util_container_move_children (GtkContainer *source,
 GSList *
 mousepad_util_get_sorted_style_schemes (void);
 
+void
+mousepad_util_load_external_style_schemes (void);
+
 GSList *
 mousepad_util_get_sorted_language_sections (void);
 

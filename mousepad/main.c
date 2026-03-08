@@ -28,6 +28,7 @@ main (gint argc,
       gchar **argv)
 {
   MousepadApplication *application;
+  GApplicationFlags flags;
   gint status;
 
   /* bind the text domain to the locale directory */
@@ -40,10 +41,30 @@ main (gint argc,
   /* set the package textdomain */
   textdomain (GETTEXT_PACKAGE);
 
+  flags = G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_HANDLES_OPEN;
+
+#ifdef G_OS_WIN32
+  /*
+   * GLib may require a session DBus helper on Windows for unique
+   * GApplication registration. Default to non-unique mode unless the
+   * environment explicitly requests server mode.
+   */
+  {
+    const gchar *enable_server = g_getenv ("MOUSEPAD_ENABLE_SERVER");
+
+    if (!(enable_server != NULL
+          && *enable_server != '\0'
+          && g_ascii_strcasecmp (enable_server, "0") != 0
+          && g_ascii_strcasecmp (enable_server, "false") != 0))
+      flags |= G_APPLICATION_NON_UNIQUE;
+  }
+#endif
+
   /* create the application */
   application = g_object_new (MOUSEPAD_TYPE_APPLICATION,
                               "application-id", MOUSEPAD_ID,
-                              "flags", G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_HANDLES_OPEN,
+                              "resource-base-path", "/org/xfce/mousepad",
+                              "flags", flags,
                               NULL);
 
   /* run the application */

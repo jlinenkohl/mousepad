@@ -11,12 +11,15 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $exePath = Join-Path $repoRoot "$BuildDir\mousepad\mousepad.exe"
 $exeDir = Split-Path -Parent $exePath
 $pluginDir = Join-Path $repoRoot "$BuildDir\plugins"
+$buildThemesDir = Join-Path $repoRoot "$BuildDir\themes"
+$repoThemesDir = Join-Path $repoRoot 'themes'
 
 if (-not (Test-Path $exePath)) {
   throw "Executable not found at '$exePath'. Run build-aux/windows/2-compile.ps1 first."
 }
 
 $gtkBin = Join-Path $GtkPrefix 'bin'
+$gtkShare = Join-Path $GtkPrefix 'share'
 if (-not (Test-Path $gtkBin)) {
   throw "GTK bin directory not found at '$gtkBin'."
 }
@@ -24,12 +27,29 @@ if (-not (Test-Path $gtkBin)) {
 # Ensure GTK runtime DLLs are available at process launch.
 $env:Path = "$gtkBin;$env:Path"
 
+# Ensure data files (icons, gtksourceview styles/languages, etc.) are discoverable.
+if (Test-Path $gtkShare) {
+  if ($env:XDG_DATA_DIRS) {
+    $env:XDG_DATA_DIRS = "$gtkShare;$env:XDG_DATA_DIRS"
+  }
+  else {
+    $env:XDG_DATA_DIRS = $gtkShare
+  }
+}
+
 if ($GettextPrefix -and (Test-Path (Join-Path $GettextPrefix 'bin'))) {
   $env:Path = "$(Join-Path $GettextPrefix 'bin');$env:Path"
 }
 
 if (Test-Path $pluginDir) {
   $env:MOUSEPAD_PLUGIN_DIRECTORY = $pluginDir
+}
+
+if (Test-Path $buildThemesDir) {
+  $env:MOUSEPAD_THEME_DIRECTORY = $buildThemesDir
+}
+elseif (Test-Path $repoThemesDir) {
+  $env:MOUSEPAD_THEME_DIRECTORY = $repoThemesDir
 }
 
 $schemaSrc = Join-Path $repoRoot 'mousepad\org.xfce.mousepad.gschema.xml'
@@ -48,6 +68,12 @@ if ((Test-Path $schemaSrc) -and (Test-Path $glibCompileSchemas)) {
 Write-Host "Launching $exePath"
 if ($Wait) {
   & $exePath
+  $exitCode = $LASTEXITCODE
+  if ($null -eq $exitCode) {
+    $exitCode = 0
+  }
+
+  exit $exitCode
 }
 else {
   Start-Process -FilePath $exePath -WorkingDirectory $exeDir | Out-Null

@@ -26,9 +26,15 @@ static inline gboolean
 mousepad_action_get_state_boolean (GAction *action)
 {
   GVariant *variant;
-  gboolean value;
+  gboolean value = FALSE;
+
+  if (action == NULL)
+    return FALSE;
 
   variant = g_action_get_state (action);
+  if (variant == NULL)
+    return FALSE;
+
   value = g_variant_get_boolean (variant);
   g_variant_unref (variant);
 
@@ -41,10 +47,20 @@ static inline gboolean
 mousepad_action_get_state_int32_boolean (GAction *action)
 {
   GVariant *variant;
-  gboolean value;
+  gboolean value = FALSE;
+
+  if (action == NULL)
+    return FALSE;
 
   variant = g_action_get_state (action);
-  value = g_variant_get_int32 (variant);
+  if (variant == NULL)
+    return FALSE;
+
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_INT32))
+    value = g_variant_get_int32 (variant);
+  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
+    value = g_variant_get_boolean (variant);
+
   g_variant_unref (variant);
 
   return value;

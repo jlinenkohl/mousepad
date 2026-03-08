@@ -31,6 +31,37 @@ function Assert-PkgConfigPackage {
   }
 }
 
+function Test-MesonAvailable {
+  $mesonExe = 'C:\Program Files\Meson\meson.exe'
+
+  if (Test-CommandAvailable -Name 'meson') {
+    return $true
+  }
+
+  if (Test-Path $mesonExe) {
+    & $mesonExe --version | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      return $true
+    }
+  }
+
+  if (Test-CommandAvailable -Name 'py') {
+    & py -m mesonbuild.meson --version | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      return $true
+    }
+  }
+
+  if (Test-CommandAvailable -Name 'python') {
+    & python -m mesonbuild.meson --version | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      return $true
+    }
+  }
+
+  return $false
+}
+
 if ($GtkPrefix) {
   $pkgConfigPaths = @(
     (Join-Path $GtkPrefix 'lib/pkgconfig'),
@@ -87,8 +118,11 @@ if ($GtkPrefix) {
 Assert-Command -Name 'cl'
 Assert-Command -Name 'lib'
 Assert-Command -Name 'rc'
-Assert-Command -Name 'meson'
 Assert-Command -Name 'pkg-config'
+
+if (-not (Test-MesonAvailable)) {
+  throw "Meson was not found. Ensure one of these works: 'meson', 'py -m mesonbuild.meson', or 'python -m mesonbuild.meson'."
+}
 
 Assert-PkgConfigPackage -Package 'gtk+-3.0'
 Assert-PkgConfigPackage -Package 'glib-2.0'

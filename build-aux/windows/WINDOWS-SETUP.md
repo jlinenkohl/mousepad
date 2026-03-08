@@ -28,7 +28,15 @@ winget install --id mesonbuild.meson --exact --accept-package-agreements --accep
 winget install --id Ninja-build.Ninja --exact --accept-package-agreements --accept-source-agreements
 winget install --id bloodrock.pkg-config-lite --exact --accept-package-agreements --accept-source-agreements
 winget install --id mlocati.GetText --exact --accept-package-agreements --accept-source-agreements
+winget install --id Microsoft.WinDbg --exact --accept-package-agreements --accept-source-agreements
 ```
+
+Install WinDbg to capture crash stacks (for example, startup faults that return
+codes like `0xC0000005`) directly on contributor machines.
+
+If `cdb.exe` is not on PATH after installing `Microsoft.WinDbg`, install
+Debugging Tools for Windows as part of Windows SDK, or run `cdb.exe` via a
+full path from the Windows Kits debugger directory.
 
 Install MSVC Build Tools (C/C++ workload):
 
@@ -104,8 +112,13 @@ Windows cannot find one or more runtime DLLs. Use `3-run.ps1` so the GTK
 runtime path and development schema cache are prepared automatically.
 The launcher also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins`
 when present, avoiding hardcoded install-prefix plugin paths during dev runs.
+If `<builddir>/themes` (or repo `themes`) exists, it also sets
+`MOUSEPAD_THEME_DIRECTORY` so external style XML files are discovered.
 
-For direct launches outside helper scripts, stage app-local runtime DLLs:
+`2-compile.ps1` now stages app-local runtime DLLs into `<builddir>/mousepad`
+by default, so direct `mousepad.exe` launches are self-contained.
+
+For manual restaging (usually not needed), run:
 
 ```powershell
 ./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
@@ -116,6 +129,9 @@ Then run:
 ```powershell
 ./build-msvc/mousepad/run-mousepad.cmd
 ```
+
+When `themes/*.xml` exists at repo root, `4-stage-runtime.ps1` copies them to
+`<builddir>/themes` automatically.
 
 `2-compile.ps1` generates `<builddir>/runtime-schemas` automatically, and the
 Windows runtime path now falls back to that directory for GSettings schema
@@ -134,7 +150,95 @@ msgfmt --version
 pkg-config --modversion gtk+-3.0 glib-2.0 gio-2.0 gmodule-2.0 gtksourceview-4
 ```
 
-## 6. Known Current Portability Blockers
+Debugger install check:
+
+```powershell
+winget list --id Microsoft.WinDbg
+```
+
+Debugger command checks:
+
+```powershell
+Get-Command windbgx -ErrorAction SilentlyContinue
+Get-Command cdb -ErrorAction SilentlyContinue
+```
+
+## 6. Crash Debugging (WinDbg/cdb)
+
+For hard crashes (for example `0xC0000005`), run Mousepad under `cdb` and save
+the debugger transcript:
+
+```powershell
+$cdb = @(
+	'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe',
+	'C:\Program Files\Windows Kits\10\Debuggers\x64\cdb.exe'
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $cdb) {
+	$cdb = (Get-Command cdb -ErrorAction SilentlyContinue).Source
+}
+
+if (-not $cdb) {
+	throw 'cdb.exe not found. Install Debugging Tools for Windows (SDK) or add cdb to PATH.'
+}
+
+& $cdb -o -G -g -logo build-msvc\mousepad\cdb.log -- build-msvc\mousepad\mousepad.exe --disable-server
+```
+
+The log file `build-msvc/mousepad/cdb.log` will include the exception and stack.
+
+## 7. Runtime Notes (Fonts)
+
+A warning like this is non-fatal on Windows:
+
+`couldn't load font "Adwaita Mono 11", falling back to "Sans 11"`
+
+This comes from desktop font defaults not present on a given machine. You can
+ignore it, or set a Windows-available monospace font in Mousepad preferences
+(for example `Consolas 10`).
+
+## 8. Settings Backend on Windows
+
+This Windows build flow enables `-Dkeyfile-settings=true`, so Mousepad stores
+settings in a local keyfile instead of relying on desktop dconf/gsettings
+services.
+
+Default settings path:
+
+- `%APPDATA%\Mousepad\settings.conf`
+
+Use the built-in settings CLI to read/write values:
+
+```powershell
+./build-msvc/mousepad/mousepad.exe --get-setting preferences.window.menubar-visible
+./build-msvc/mousepad/mousepad.exe --set-setting preferences.window.menubar-visible=true
+./build-msvc/mousepad/mousepad.exe --reset-setting preferences.window.menubar-visible
+```
+
+`--set-setting` expects `SETTING=VALUE`.
+For booleans, accepted values are `true/false`, `yes/no`, and `1/0`.
+
+These commands work directly with the staged executable produced by
+`./build-aux/windows/2-compile.ps1`.
+
+## 9. Custom Color Schemes (themes/*.xml)
+
+Mousepad auto-loads GtkSourceView style schemes from any `*.xml` files found
+in theme directories. For this repo workflow, use:
+
+- `themes` (repo root)
+- `<builddir>/themes` (staged output)
+
+Add or remove XML files in `themes/` without code changes, then rebuild:
+
+```powershell
+./build-aux/windows/2-compile.ps1 -BuildDir build-msvc
+```
+
+You can also point to custom directories with `MOUSEPAD_THEME_DIRECTORY`
+(supports multiple paths separated by the platform path separator).
+
+## 10. Known Current Portability Blockers
 
 After environment fixes, current next failures are source portability items:
 - MSVC does not support VLA usage in `mousepad/mousepad-history.c`
@@ -142,7 +246,7 @@ After environment fixes, current next failures are source portability items:
 
 These are code-level porting tasks, not environment setup issues.
 
-## 7. Upstream Sync Workflow (Recommended)
+## 11. Upstream Sync Workflow (Recommended)
 
 To keep Windows changes as a thin layover:
 1. Update fork `master` from upstream `master`.
@@ -152,7 +256,7 @@ To keep Windows changes as a thin layover:
 
 This minimizes rework when upstream moves.
 
-## 8. Notes For Future Contributors
+## 12. Notes For Future Contributors
 
 - Prefer Windows-specific changes under `build-aux/windows/` when possible.
 - Keep source portability fixes as small, focused commits to ease upstream merges.

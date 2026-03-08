@@ -1007,6 +1007,9 @@ mousepad_window_toolbar_new_from_model (MousepadWindow *window,
   gtk_toolbar_set_style (GTK_TOOLBAR (toolbar), GTK_TOOLBAR_ICONS);
   gtk_toolbar_set_icon_size (GTK_TOOLBAR (toolbar), GTK_ICON_SIZE_SMALL_TOOLBAR);
 
+  if (G_UNLIKELY (model == NULL))
+    return toolbar;
+
   /* insert items */
   for (m = 0; m < g_menu_model_get_n_items (model); m++)
     {
@@ -1071,27 +1074,47 @@ mousepad_window_post_init (MousepadWindow *window)
   /* create text view menu and set tooltips (must be done before setting the menubar visibility) */
   application = gtk_window_get_application (GTK_WINDOW (window));
   model = G_MENU_MODEL (gtk_application_get_menu_by_id (application, "textview-menu"));
-  window->textview_menu = gtk_menu_new_from_model (model);
+  if (model != NULL)
+    window->textview_menu = gtk_menu_new_from_model (model);
+  else
+    window->textview_menu = gtk_menu_new ();
+
   gtk_menu_attach_to_widget (GTK_MENU (window->textview_menu),
                              GTK_WIDGET (window), NULL);
-  mousepad_window_menu_set_tooltips (window, window->textview_menu, model, NULL);
+  if (model != NULL)
+    mousepad_window_menu_set_tooltips (window, window->textview_menu, model, NULL);
 
   /* create tab menu and set tooltips */
   model = G_MENU_MODEL (gtk_application_get_menu_by_id (application, "tab-menu"));
-  window->tab_menu = gtk_menu_new_from_model (model);
+  if (model != NULL)
+    window->tab_menu = gtk_menu_new_from_model (model);
+  else
+    window->tab_menu = gtk_menu_new ();
+
   gtk_menu_attach_to_widget (GTK_MENU (window->tab_menu),
                              GTK_WIDGET (window), NULL);
-  mousepad_window_menu_set_tooltips (window, window->tab_menu, model, NULL);
+  if (model != NULL)
+    mousepad_window_menu_set_tooltips (window, window->tab_menu, model, NULL);
 
   /* create languages menu and set tooltips */
   model = G_MENU_MODEL (gtk_application_get_menu_by_id (application, "document.filetype"));
-  window->languages_menu = gtk_menu_new_from_model (model);
+  if (model != NULL)
+    window->languages_menu = gtk_menu_new_from_model (model);
+  else
+    window->languages_menu = gtk_menu_new ();
+
   gtk_menu_attach_to_widget (GTK_MENU (window->languages_menu),
                              GTK_WIDGET (window), NULL);
-  mousepad_window_menu_set_tooltips (window, window->languages_menu, model, NULL);
+  if (model != NULL)
+    mousepad_window_menu_set_tooltips (window, window->languages_menu, model, NULL);
 
   /* hide the default menubar */
   gtk_application_window_set_show_menubar (GTK_APPLICATION_WINDOW (window), FALSE);
+
+#ifdef G_OS_WIN32
+  /* Favor discoverability during Windows development runs. */
+  mousepad_setting_set_boolean (MENUBAR, TRUE);
+#endif
 
   /*
    * Outsource the creation of the menubar from
@@ -1101,13 +1124,17 @@ mousepad_window_post_init (MousepadWindow *window)
    * With GTK+ 4, this will lead to use gtk_popover_menu_bar_new_from_model()
    */
   model = gtk_application_get_menubar (application);
-  window->menubar = gtk_menu_bar_new_from_model (model);
+  if (model != NULL)
+    window->menubar = gtk_menu_bar_new_from_model (model);
+  else
+    window->menubar = gtk_menu_bar_new ();
 
   /* insert the menubar in its previously reserved space */
   gtk_box_pack_start (GTK_BOX (window->menubar_box), window->menubar, TRUE, TRUE, 0);
 
   /* set tooltips and connect handlers to the menubar items signals */
-  mousepad_window_menu_set_tooltips (window, window->menubar, model, NULL);
+  if (model != NULL)
+    mousepad_window_menu_set_tooltips (window, window->menubar, model, NULL);
 
   /* update the menubar visibility and related actions state */
   mousepad_window_update_bar_visibility (window, MENUBAR);
@@ -2660,7 +2687,7 @@ mousepad_window_update_bar_visibility (MousepadWindow *window,
                                        const gchar *hint)
 {
   GtkWidget *bar;
-  GVariant *state;
+  GVariant *state, *state_fs;
   const gchar *setting, *setting_fs;
   gboolean visible, visible_fs;
 
@@ -2688,13 +2715,33 @@ mousepad_window_update_bar_visibility (MousepadWindow *window,
   else
     return;
 
-  /* get visibility setting in window mode */
-  visible = mousepad_setting_get_boolean (setting);
+  /* get visibility setting in window mode, with schema-default fallback */
+  state = mousepad_setting_get_variant (setting);
+  if (state != NULL)
+    {
+      visible = g_variant_get_boolean (state);
+      g_variant_unref (state);
+    }
+  else
+    {
+      /* Schema defaults: menubar=true, toolbar/statusbar=false */
+      visible = g_strcmp0 (setting, MENUBAR) == 0;
+    }
 
   /* deduce the visibility setting if we are in fullscreen mode */
   if (mousepad_window_get_in_fullscreen (window))
     {
-      visible_fs = mousepad_setting_get_enum (setting_fs);
+      state_fs = mousepad_setting_get_variant (setting_fs);
+      if (state_fs != NULL)
+        {
+          visible_fs = g_variant_get_int32 (state_fs);
+          g_variant_unref (state_fs);
+        }
+      else
+        {
+          visible_fs = AUTO;
+        }
+
       visible = (visible_fs == AUTO) ? visible : (visible_fs == YES);
     }
 
@@ -2704,10 +2751,9 @@ mousepad_window_update_bar_visibility (MousepadWindow *window,
   /* avoid menu actions */
   lock_menu_updates++;
 
-  /* request for the action state to be changed according to the setting */
-  state = mousepad_setting_get_variant (setting);
-  g_action_group_change_action_state (G_ACTION_GROUP (window), setting, state);
-  g_variant_unref (state);
+  /* keep action state in sync, even when settings backend fallback is used */
+  g_action_group_change_action_state (G_ACTION_GROUP (window), setting,
+                                      g_variant_new_boolean (visible));
 
   /* allow menu actions again */
   lock_menu_updates--;
@@ -3697,13 +3743,26 @@ mousepad_window_menu_tab_sizes_update (MousepadWindow *window)
   /* get the number of items in the tab-size submenu */
   application = gtk_window_get_application (GTK_WINDOW (window));
   model = G_MENU_MODEL (gtk_application_get_menu_by_id (application, "document.tab.tab-size"));
+  if (G_UNLIKELY (model == NULL))
+    {
+      lock_menu_updates--;
+      return;
+    }
+
   nitems = g_menu_model_get_n_items (model);
 
   /* check if there is a default item with this tab size */
   for (nitem = 0; nitem < nitems; nitem++)
     {
-      tab_size_n = atoi (g_variant_get_string (
-        g_menu_model_get_item_attribute_value (model, nitem, "label", NULL), NULL));
+      GVariant *label;
+
+      label = g_menu_model_get_item_attribute_value (model, nitem, "label", G_VARIANT_TYPE_STRING);
+      if (label == NULL)
+        continue;
+
+      tab_size_n = atoi (g_variant_get_string (label, NULL));
+      g_variant_unref (label);
+
       if (tab_size_n == tab_size)
         break;
     }
@@ -3811,8 +3870,25 @@ mousepad_window_update_menu_item (MousepadWindow *window,
 
   /* get the menu item */
   application = gtk_window_get_application (GTK_WINDOW (window));
+  if (application == NULL)
+    {
+      lock_menu_updates--;
+      return;
+    }
+
   menu = gtk_application_get_menu_by_id (application, menu_id);
+  if (!G_IS_MENU (menu))
+    {
+      lock_menu_updates--;
+      return;
+    }
+
   item = g_menu_item_new_from_model (G_MENU_MODEL (menu), index);
+  if (item == NULL)
+    {
+      lock_menu_updates--;
+      return;
+    }
 
   /* set the menu item attributes */
   if (g_strcmp0 (menu_id, "item.file.reload") == 0)
