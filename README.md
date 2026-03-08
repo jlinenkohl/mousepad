@@ -20,6 +20,7 @@ and integrate this new feature in Mousepad.
 ### Changelog
 
 See [NEWS](https://gitlab.xfce.org/apps/mousepad/-/blob/master/NEWS) for details on changes and fixes made in the current release.
+For fork-specific Windows/MSVC changes in this repository, see `CHANGELOG.md`.
 
 
 ### Required Packages 
