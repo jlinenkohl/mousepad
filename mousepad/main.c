@@ -29,6 +29,7 @@ main (gint argc,
 {
   MousepadApplication *application;
   GApplicationFlags flags;
+  const gchar *application_id;
   gint status;
 
   /* bind the text domain to the locale directory */
@@ -42,6 +43,7 @@ main (gint argc,
   textdomain (GETTEXT_PACKAGE);
 
   flags = G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_HANDLES_OPEN;
+  application_id = MOUSEPAD_ID;
 
 #ifdef G_OS_WIN32
   /*
@@ -56,13 +58,20 @@ main (gint argc,
           && *enable_server != '\0'
           && g_ascii_strcasecmp (enable_server, "0") != 0
           && g_ascii_strcasecmp (enable_server, "false") != 0))
-      flags |= G_APPLICATION_NON_UNIQUE;
+      {
+        g_setenv ("DBUS_SESSION_BUS_ADDRESS", "disabled:", FALSE);
+        flags |= G_APPLICATION_NON_UNIQUE;
+
+        /* In non-unique mode, avoid app-id registration paths that can try
+         * to spawn missing Win32 DBus helpers and delay startup. */
+        application_id = NULL;
+      }
   }
 #endif
 
   /* create the application */
   application = g_object_new (MOUSEPAD_TYPE_APPLICATION,
-                              "application-id", MOUSEPAD_ID,
+                              "application-id", application_id,
                               "resource-base-path", "/org/xfce/mousepad",
                               "flags", flags,
                               NULL);

@@ -124,6 +124,8 @@ static void
 mousepad_application_action_whitespace (GSimpleAction *action,
                                         GVariant *state,
                                         gpointer data);
+static void
+mousepad_application_windows_sanitize_font_setting (void);
 
 
 
@@ -1007,6 +1009,28 @@ mousepad_application_opening_mode_changed (MousepadApplication *application)
 
 
 
+static void
+mousepad_application_windows_sanitize_font_setting (void)
+{
+#ifdef G_OS_WIN32
+  gchar *font_name;
+
+  if (MOUSEPAD_SETTING_GET_BOOLEAN (USE_DEFAULT_FONT))
+    return;
+
+  font_name = MOUSEPAD_SETTING_GET_STRING (FONT);
+  if (font_name != NULL && g_str_has_prefix (font_name, "Adwaita"))
+    {
+      /* Adwaita fonts are commonly unavailable on Windows and can produce
+       * startup warnings; use the Windows default fork font instead. */
+      MOUSEPAD_SETTING_SET_STRING (FONT, DEFAULT_FONT);
+    }
+  g_free (font_name);
+#endif
+}
+
+
+
 static gint
 mousepad_application_sort_plugins (gconstpointer a,
                                    gconstpointer b)
@@ -1032,10 +1056,47 @@ static const gchar *
 mousepad_application_get_plugin_directory (void)
 {
   const gchar *plugin_dir;
+#ifdef G_OS_WIN32
+  static gchar *fallback_plugin_dir = NULL;
+  gchar *install_dir;
+  gchar *candidate;
+
+  if (fallback_plugin_dir != NULL)
+    return fallback_plugin_dir;
+#endif
 
   plugin_dir = g_getenv ("MOUSEPAD_PLUGIN_DIRECTORY");
   if (plugin_dir != NULL && *plugin_dir != '\0')
     return plugin_dir;
+
+#ifdef G_OS_WIN32
+  if (g_file_test (MOUSEPAD_PLUGIN_DIRECTORY, G_FILE_TEST_IS_DIR))
+    return MOUSEPAD_PLUGIN_DIRECTORY;
+
+  install_dir = g_win32_get_package_installation_directory_of_module (NULL);
+  if (install_dir != NULL)
+    {
+      candidate = g_build_filename (install_dir, "..", "plugins", NULL);
+      if (g_file_test (candidate, G_FILE_TEST_IS_DIR))
+        {
+          fallback_plugin_dir = candidate;
+          g_free (install_dir);
+          return fallback_plugin_dir;
+        }
+      g_free (candidate);
+
+      candidate = g_build_filename (install_dir, "plugins", NULL);
+      if (g_file_test (candidate, G_FILE_TEST_IS_DIR))
+        {
+          fallback_plugin_dir = candidate;
+          g_free (install_dir);
+          return fallback_plugin_dir;
+        }
+      g_free (candidate);
+
+      g_free (install_dir);
+    }
+#endif
 
   return MOUSEPAD_PLUGIN_DIRECTORY;
 }
@@ -1066,10 +1127,19 @@ mousepad_application_load_plugins (MousepadApplication *application)
     {
       /* the plugin directory may not exist (compilation without plugin) */
       if (g_error_matches (error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+#ifdef G_OS_WIN32
+        {
+          g_error_free (error);
+          return;
+        }
+#else
         g_message ("Plugin directory '%s' not found", plugin_dir);
+#endif
       else
         g_warning ("Failed to open plugin directory '%s': %s",
                    plugin_dir, error->message);
+
+      g_error_free (error);
 
       return;
     }
@@ -1164,6 +1234,8 @@ mousepad_application_startup (GApplication *gapplication)
 
   /* chain up to parent */
   G_APPLICATION_CLASS (mousepad_application_parent_class)->startup (gapplication);
+
+  mousepad_application_windows_sanitize_font_setting ();
 
   /* load plugins */
   mousepad_application_load_plugins (application);
