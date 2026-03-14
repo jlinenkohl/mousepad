@@ -59,3 +59,56 @@ Scope: `dev/windows-gtk3` fork branch.
 - Upstream release history remains in `NEWS`.
 - This file is intentionally fork-oriented and should be updated for future
   fork deltas that are not yet upstreamed.
+
+## 2026-03-14 - Block Mode + Syntax Highlighting Milestone
+
+Scope: stacked feature branches on top of `dev/windows-gtk3`.
+
+- `feat/blockmode`
+- `feat/syntax-highlighting`
+
+### Column / Block Editing (`feat/blockmode`)
+
+- Added rectangular (column) editing mode with status indicator and settings
+  integration.
+- Implemented rectangular copy/cut/paste/delete behavior and thin-column
+  insertion workflows.
+- Added block-aware `Tab` and `Shift+Tab` handling and improved behavior on
+  mixed indentation and short/empty lines.
+- Improved mouse/keyboard rectangular selection alignment and overlay drawing.
+- Hardened undo/redo integration to avoid stale rectangle state corruption.
+- Added `COL` status UX integration and synchronization with settings.
+
+### External GtkSourceView Language Specs (`feat/syntax-highlighting`)
+
+- Added support for loading external language specs from repo/runtime paths.
+- Added environment override support:
+  - `MOUSEPAD_LANGUAGE_SPEC_DIRECTORY`
+- Added settings override support:
+  - `preferences.view.language-specs-directory`
+- Added Windows runtime staging and launcher support for:
+  - `*.lang`
+  - `*.xml`
+  - `language2.rng`
+- Vendored upstream GtkSourceView language specs into `language-specs/`.
+
+### Branch / Review Strategy
+
+Recommended stacked review order to minimize divergence and simplify rebases:
+
+1. `dev/windows-gtk3`
+2. `feat/blockmode` (base: `dev/windows-gtk3`)
+3. `feat/syntax-highlighting` (base: `feat/blockmode`)
+
+### Follow-up (Deferred)
+
+- Line ending policy review with user before changes:
+  - Current behavior detects from first encountered EOL on load.
+  - Save normalizes to current document line-ending mode.
+  - Preserve-existing/mixed-EOL policy is a candidate future feature.
+
+### Non-goal (Current Fork Direction)
+
+- No GTK4 / GtkSourceView5 migration in this fork phase.
+- Keep alignment with upstream GTK3 + GtkSourceView4 expectations unless
+  upstream direction changes.
