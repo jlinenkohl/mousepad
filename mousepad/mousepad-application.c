@@ -1241,6 +1241,7 @@ mousepad_application_startup (GApplication *gapplication)
   mousepad_application_set_accels (application);
 
   /* add some static submenus to the application menubar */
+  mousepad_util_load_external_language_specs ();
   mousepad_application_create_languages_menu (application);
   mousepad_util_load_external_style_schemes ();
   mousepad_application_create_style_schemes_menu (application);

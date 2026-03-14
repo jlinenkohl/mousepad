@@ -145,6 +145,9 @@ It also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins` when present,
 so plugin discovery is relative to the build output during development runs.
 If `<builddir>/themes` exists, it also sets `MOUSEPAD_THEME_DIRECTORY` so
 repo-local style scheme XML files are discovered.
+If `<builddir>/language-specs` exists, it also sets
+`MOUSEPAD_LANGUAGE_SPEC_DIRECTORY` so repo-local GtkSourceView language XML
+files are discovered.
 
 To restage runtime files manually (usually not needed because `2-compile.ps1`
 already does this), run:
@@ -156,6 +159,8 @@ already does this), run:
 This creates `build-msvc/mousepad/run-mousepad.cmd` for self-contained launch.
 When `themes/*.xml` exists in the repository root, they are also staged to
 `<builddir>/themes` automatically.
+When `language-specs/*.{lang,xml}` exists in the repository root, they are
+also staged to `<builddir>/language-specs` automatically.
 
 That helper exports:
 
@@ -170,6 +175,23 @@ locations (when present):
 - `themes` (repo root, for development runs)
 - `<builddir>/themes` (staged runtime)
 - `MOUSEPAD_THEME_DIRECTORY` (optional override, supports multiple paths)
+
+## Custom Language Specs on Windows
+
+Mousepad now auto-loads GtkSourceView language specs from `*.lang` and
+`*.xml` files found in these locations (when present). The language schema
+file `language2.rng` must be present in the same directory:
+
+- `language-specs` (repo root, for development runs)
+- `<builddir>/language-specs` (staged runtime)
+- `MOUSEPAD_LANGUAGE_SPEC_DIRECTORY` (optional override, supports multiple paths)
+
+To add language specs, drop GtkSourceView language XML files into
+`language-specs/`, re-run `./build-aux/windows/2-compile.ps1`, then start
+Mousepad.
+
+You can also configure additional search paths through the setting
+`preferences.view.language-specs-directory`.
 
 To add a theme, drop a GtkSourceView style scheme XML file into `themes/`,
 re-run `./build-aux/windows/2-compile.ps1`, then start Mousepad.

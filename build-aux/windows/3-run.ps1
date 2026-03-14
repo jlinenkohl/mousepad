@@ -13,6 +13,8 @@ $exeDir = Split-Path -Parent $exePath
 $pluginDir = Join-Path $repoRoot "$BuildDir\plugins"
 $buildThemesDir = Join-Path $repoRoot "$BuildDir\themes"
 $repoThemesDir = Join-Path $repoRoot 'themes'
+$buildLanguageSpecsDir = Join-Path $repoRoot "$BuildDir\language-specs"
+$repoLanguageSpecsDir = Join-Path $repoRoot 'language-specs'
 
 if (-not (Test-Path $exePath)) {
   throw "Executable not found at '$exePath'. Run build-aux/windows/2-compile.ps1 first."
@@ -50,6 +52,13 @@ if (Test-Path $buildThemesDir) {
 }
 elseif (Test-Path $repoThemesDir) {
   $env:MOUSEPAD_THEME_DIRECTORY = $repoThemesDir
+}
+
+if (Test-Path $buildLanguageSpecsDir) {
+  $env:MOUSEPAD_LANGUAGE_SPEC_DIRECTORY = $buildLanguageSpecsDir
+}
+elseif (Test-Path $repoLanguageSpecsDir) {
+  $env:MOUSEPAD_LANGUAGE_SPEC_DIRECTORY = $repoLanguageSpecsDir
 }
 
 $schemaSrc = Join-Path $repoRoot 'mousepad\org.xfce.mousepad.gschema.xml'

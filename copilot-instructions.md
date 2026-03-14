@@ -40,6 +40,15 @@ Keep this fork as close as possible to upstream Mousepad while extending support
 - Windows startup may emit DBus helper warnings when session DBus binaries are absent; avoid introducing hard DBus dependencies.
 - Runtime/plugin path issues and staged DLL behavior belong in `build-aux/windows/*` and should not leak into generic app logic unless necessary.
 
+## Follow-up Notes
+- Line ending behavior needs follow-up discussion with user before implementation changes.
+- Current behavior summary (verified in code):
+	- On open, EOL is inferred from the first line ending encountered (`LF`/`CR`/`CRLF`).
+	- On save, output is normalized to the document's current selected line ending mode.
+	- There is no explicit "preserve existing/mixed line endings exactly" mode today.
+- Risk called out by user: opening mixed-ending files can lead to unintended normalization on save.
+- Follow-up task: design a preserve-existing policy (including mixed-EOL strategy) that is upstream-friendly and opt-in/out via clear settings/UI.
+
 ## Working Repository
 - Canonical repo path: `Q:\projects\mousepad`
 - Active integration branch: `dev/windows-gtk3`
