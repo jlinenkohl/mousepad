@@ -124,6 +124,13 @@ For manual restaging (usually not needed), run:
 ./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
 ```
 
+For a smaller self-contained runtime set, stage only recursive PE dependencies
+(`mousepad.exe` plus deps-of-deps) from GTK/gettext bins:
+
+```powershell
+./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3 -MinimalDlls
+```
+
 Then run:
 
 ```powershell
@@ -136,6 +143,25 @@ When `themes/*.xml` exists at repo root, `4-stage-runtime.ps1` copies them to
 `2-compile.ps1` generates `<builddir>/runtime-schemas` automatically, and the
 Windows runtime path now falls back to that directory for GSettings schema
 discovery during non-installed development runs.
+
+To create a small portable release zip (self-contained, user-run, no admin):
+
+```powershell
+./build-aux/windows/5-create-release-package.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3
+```
+
+By default this uses minimal recursive DLL staging (deps-of-deps). Use
+`-AllDlls` for a broader copy-all runtime package.
+By default, the zip tag is auto-derived from the built binary `--version`
+output (same `VERSION_FULL` shown in Help -> About, for example
+`0.7.1-dev-b7042b77`). Use `-Version vX.Y.Z-<commit>` to override.
+The packager also writes `dist/SHA256SUMS.txt` and `<zip>.sha256`.
+
+Optional GitHub release publishing (requires `gh auth login`):
+
+```powershell
+./build-aux/windows/6-publish-github-release.ps1 -Tag v0.7.1-dev-b7042b77 -Version 0.7.1-dev-b7042b77
+```
 
 ## 5. Quick Environment Verification
 

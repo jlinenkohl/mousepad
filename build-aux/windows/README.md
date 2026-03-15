@@ -156,6 +156,13 @@ already does this), run:
 ./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk
 ```
 
+For leaner release packaging, stage only recursive PE dependencies
+(`mousepad.exe` plus deps-of-deps) from GTK/gettext bins:
+
+```powershell
+./build-aux/windows/4-stage-runtime.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk -MinimalDlls
+```
+
 This creates `build-msvc/mousepad/run-mousepad.cmd` for self-contained launch.
 When `themes/*.xml` exists in the repository root, they are also staged to
 `<builddir>/themes` automatically.
@@ -166,6 +173,37 @@ That helper exports:
 
 - `PKG_CONFIG_PATH=<prefix>/lib/pkgconfig:<prefix>/share/pkgconfig`
 - `PATH=<prefix>/bin:...`
+
+## Create Portable Release Zip
+
+To create a small self-contained release zip for Windows 11:
+
+```powershell
+./build-aux/windows/5-create-release-package.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk
+```
+
+By default, this uses minimal recursive DLL staging (deps-of-deps closure).
+Use `-AllDlls` if you want the broader copy-all runtime approach.
+By default, the zip tag is auto-derived from the built binary `--version`
+output (same `VERSION_FULL` shown in Help -> About, for example
+`0.7.1-dev-b7042b77`).
+Use `-Version vX.Y.Z-<commit>` to override the tag explicitly.
+
+The zip is written to `dist/` by default.
+The script also writes `dist/SHA256SUMS.txt` and a companion
+`<zip>.sha256` file.
+
+To publish to GitHub Releases with assets (zip + checksums):
+
+```powershell
+./build-aux/windows/6-publish-github-release.ps1 -Tag v0.7.1-dev-b7042b77 -Version 0.7.1-dev-b7042b77
+```
+
+Optional flags:
+
+- `-Draft`
+- `-PreRelease`
+- `-CreateTag` (creates and pushes the tag before publishing)
 
 ## Custom Themes on Windows
 
