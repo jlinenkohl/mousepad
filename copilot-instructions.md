@@ -40,6 +40,20 @@ Keep this fork as close as possible to upstream Mousepad while extending support
 - Windows startup may emit DBus helper warnings when session DBus binaries are absent; avoid introducing hard DBus dependencies.
 - Runtime/plugin path issues and staged DLL behavior belong in `build-aux/windows/*` and should not leak into generic app logic unless necessary.
 
+## Release Packaging Policy (Windows)
+- Do not commit release zip artifacts to git history.
+- Keep release artifacts under `dist/` and keep `dist/` ignored in `.gitignore`.
+- Preferred release build flow:
+	1. `./build-aux/windows/5-create-release-package.ps1 -BuildDir build-msvc -GtkPrefix Q:\gtk3`
+	2. Verify generated files in `dist/`:
+		- `mousepad-<version>-<commit>.zip`
+		- `mousepad-<version>-<commit>.zip.sha256`
+		- `SHA256SUMS.txt`
+- Package naming should match application About/version identity (`VERSION_FULL`), e.g. `0.7.1-dev-b7042b77`.
+- Publish binaries as GitHub Release assets (not repository commits).
+- Optional scripted publish command:
+	- `./build-aux/windows/6-publish-github-release.ps1 -Tag v<version>-<commit> -Version <version>-<commit>`
+
 ## Follow-up Notes
 - Line ending behavior needs follow-up discussion with user before implementation changes.
 - Current behavior summary (verified in code):
