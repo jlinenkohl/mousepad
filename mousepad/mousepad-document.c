@@ -858,7 +858,10 @@ mousepad_document_search (MousepadDocument *document,
   gchar *selected_text;
   const gchar *reference = "";
   const gchar *search_string = string;
+  const gchar *replace_string = replace;
   gchar *multiline_regex = NULL;
+  gchar *line_regex = NULL;
+  gchar *line_replace = NULL;
   gboolean has_references;
 
   /* get the search iter */
@@ -914,8 +917,28 @@ mousepad_document_search (MousepadDocument *document,
   if (gtk_source_search_settings_get_regex_enabled (search_settings)
       && MOUSEPAD_SETTING_GET_BOOLEAN (SEARCH_REGEX_MULTILINE))
     {
-      multiline_regex = g_strconcat ("(?m)", string, NULL);
-      search_string = multiline_regex;
+      if (g_strcmp0 (string, "^") == 0 || g_strcmp0 (string, "$") == 0)
+        {
+          /* GtkSource regex search does not handle bare zero-width anchors for
+           * interactive find/replace, so map them to full-line matches. */
+          line_regex = g_strdup ("(?m)^.*$");
+          search_string = line_regex;
+
+          if (replace != NULL && (flags & MOUSEPAD_SEARCH_FLAGS_ACTION_REPLACE))
+            {
+              if (string[0] == '^')
+                line_replace = g_strconcat (replace, "\\0", NULL);
+              else
+                line_replace = g_strconcat ("\\0", replace, NULL);
+
+              replace_string = line_replace;
+            }
+        }
+      else
+        {
+          multiline_regex = g_strconcat ("(?m)", string, NULL);
+          search_string = multiline_regex;
+        }
     }
 
   gtk_source_search_settings_set_search_text (search_settings, search_string);
@@ -937,9 +960,9 @@ mousepad_document_search (MousepadDocument *document,
        * used to replace text in this function, which finally behaves the same as
        * gtk_source_search_context_replace(): see
        * https://gitlab.gnome.org/GNOME/gtksourceview/-/issues/172 */
-      if (replace != NULL && (flags & MOUSEPAD_SEARCH_FLAGS_ACTION_REPLACE)
+      if (replace_string != NULL && (flags & MOUSEPAD_SEARCH_FLAGS_ACTION_REPLACE)
           && (flags & MOUSEPAD_SEARCH_FLAGS_ENTIRE_AREA)
-          && g_regex_check_replacement (replace, &has_references, NULL)
+          && g_regex_check_replacement (replace_string, &has_references, NULL)
           && !has_references)
         reference = "\\g<MousepadReservedName>";
     }
@@ -948,9 +971,11 @@ mousepad_document_search (MousepadDocument *document,
   mousepad_object_set_data (search_context, "flags", GINT_TO_POINTER (flags));
   mousepad_object_set_data_full (search_context, "search-string", g_strdup (string), g_free);
   mousepad_object_set_data_full (search_context, "replace",
-                                 g_strconcat (reference, replace, NULL), g_free);
+                                 g_strconcat (reference, replace_string, NULL), g_free);
 
   g_free (multiline_regex);
+  g_free (line_regex);
+  g_free (line_replace);
 
   /* keep the document alive during the search process */
   g_object_ref (document);
