@@ -689,7 +689,9 @@ mousepad_document_search_completed_idle (gpointer data)
   end = mousepad_object_get_data (search_context, "end");
   found = GPOINTER_TO_INT (mousepad_object_get_data (search_context, "found"));
   search_settings = gtk_source_search_context_get_settings (search_context);
-  string = gtk_source_search_settings_get_search_text (search_settings);
+  string = mousepad_object_get_data (search_context, "search-string");
+  if (string == NULL)
+    string = gtk_source_search_settings_get_search_text (search_settings);
 
   if (flags & MOUSEPAD_SEARCH_FLAGS_ITER_SEL_START)
     gtk_text_buffer_get_selection_bounds (document->buffer, &iter, NULL);
@@ -855,6 +857,8 @@ mousepad_document_search (MousepadDocument *document,
   GCancellable *cancellable;
   gchar *selected_text;
   const gchar *reference = "";
+  const gchar *search_string = string;
+  gchar *multiline_regex = NULL;
   gboolean has_references;
 
   /* get the search iter */
@@ -905,7 +909,16 @@ mousepad_document_search (MousepadDocument *document,
 
   /* set the string to search for */
   search_settings = gtk_source_search_context_get_settings (search_context);
-  gtk_source_search_settings_set_search_text (search_settings, string);
+
+  /* use multiline mode for regex searches only when explicitly requested */
+  if (gtk_source_search_settings_get_regex_enabled (search_settings)
+      && MOUSEPAD_SETTING_GET_BOOLEAN (SEARCH_REGEX_MULTILINE))
+    {
+      multiline_regex = g_strconcat ("(?m)", string, NULL);
+      search_string = multiline_regex;
+    }
+
+  gtk_source_search_settings_set_search_text (search_settings, search_string);
 
   /* set wrap around: always true for the search bar, bound to GSettings otherwise */
   gtk_source_search_settings_set_wrap_around (search_settings,
@@ -933,8 +946,11 @@ mousepad_document_search (MousepadDocument *document,
 
   /* attach some data for the second stage */
   mousepad_object_set_data (search_context, "flags", GINT_TO_POINTER (flags));
+  mousepad_object_set_data_full (search_context, "search-string", g_strdup (string), g_free);
   mousepad_object_set_data_full (search_context, "replace",
                                  g_strconcat (reference, replace, NULL), g_free);
+
+  g_free (multiline_regex);
 
   /* keep the document alive during the search process */
   g_object_ref (document);
@@ -966,7 +982,9 @@ mousepad_document_emit_search_signal (MousepadDocument *document,
   flags = GPOINTER_TO_INT (mousepad_object_get_data (search_context, "flags"));
   n_matches = gtk_source_search_context_get_occurrences_count (search_context);
   search_settings = gtk_source_search_context_get_settings (search_context);
-  string = gtk_source_search_settings_get_search_text (search_settings);
+  string = mousepad_object_get_data (search_context, "search-string");
+  if (string == NULL)
+    string = gtk_source_search_settings_get_search_text (search_settings);
 
   /* emit the signal */
   g_signal_emit (document, document_signals[SEARCH_COMPLETED], 0, document->priv->cur_match,
