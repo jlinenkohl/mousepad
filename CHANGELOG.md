@@ -112,3 +112,14 @@ Recommended stacked review order to minimize divergence and simplify rebases:
 - No GTK4 / GtkSourceView5 migration in this fork phase.
 - Keep alignment with upstream GTK3 + GtkSourceView4 expectations unless
   upstream direction changes.
+
+## 2026-05-28 - Regex Multiline Option Update
+
+Scope: `feat/blockmode`.
+
+- Added an explicit regex option in both Find and Find/Replace:
+  - `Regex multiline anchors`
+- Enabled `Regex multiline anchors` by default for new settings values.
+- Kept regex behavior user-controlled (no silent always-on multiline rewrite).
+- Added compatibility handling so bare regex anchors `^` and `$` work for
+  expected line prefix/suffix workflows when multiline anchors are enabled.
