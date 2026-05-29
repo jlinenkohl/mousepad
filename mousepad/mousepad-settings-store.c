@@ -95,6 +95,13 @@ mousepad_settings_store_update_env (void)
   GPtrArray *paths;
   gchar *new_value = NULL;
 
+#ifndef G_OS_WIN32
+  gchar *exe_path;
+  gchar *exe_dir;
+  gchar *cwd;
+  gchar *schema_dir;
+#endif
+
 #ifdef G_OS_WIN32
   gchar *install_dir;
   gchar *schema_dir;
@@ -102,6 +109,10 @@ mousepad_settings_store_update_env (void)
 
   old_value = g_getenv ("GSETTINGS_SCHEMA_DIR");
   paths = g_ptr_array_new_with_free_func (g_free);
+
+  /* Prefer Mousepad's schema directory so newly added keys are not masked
+   * by older schemas that may already exist in user/system paths. */
+  g_ptr_array_add (paths, g_strdup (MOUSEPAD_GSETTINGS_SCHEMA_DIR));
 
   if (old_value != NULL && *old_value != '\0')
     {
@@ -116,7 +127,63 @@ mousepad_settings_store_update_env (void)
       g_strfreev (old_paths);
     }
 
-  g_ptr_array_add (paths, g_strdup (MOUSEPAD_GSETTINGS_SCHEMA_DIR));
+#ifndef G_OS_WIN32
+  /* Development fallback locations used by local Meson runs on Linux. */
+  exe_path = g_file_read_link ("/proc/self/exe", NULL);
+  exe_dir = exe_path != NULL ? g_path_get_dirname (exe_path) : NULL;
+  g_free (exe_path);
+
+  if (exe_dir != NULL)
+    {
+      /* Installed layout fallback: <bindir>/../share/glib-2.0/schemas */
+      schema_dir = g_build_filename (exe_dir, "..", "share", "glib-2.0", "schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      /* Development layout fallback: <builddir>/runtime-schemas */
+      schema_dir = g_build_filename (exe_dir, "..", "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      /* Alternate fallback: <bindir>/runtime-schemas */
+      schema_dir = g_build_filename (exe_dir, "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      g_free (exe_dir);
+    }
+
+  /* Final fallback from current working directory. */
+  cwd = g_get_current_dir ();
+  if (cwd != NULL)
+    {
+      schema_dir = g_build_filename (cwd, "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      schema_dir = g_build_filename (cwd, "build", "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      schema_dir = g_build_filename (cwd, "builddir", "runtime-schemas", NULL);
+      if (g_file_test (schema_dir, G_FILE_TEST_IS_DIR))
+        g_ptr_array_add (paths, schema_dir);
+      else
+        g_free (schema_dir);
+
+      g_free (cwd);
+    }
+#endif
 
 #ifdef G_OS_WIN32
   install_dir = g_win32_get_package_installation_directory_of_module (NULL);
