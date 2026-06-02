@@ -103,13 +103,10 @@ else
       gmodule,
       gtk,
       gtksourceview,
+      libm,
     ],
     install: true,
   )
-endif
-
-if host_machine.system() == 'linux'
-  libmousepad.link_with(libm)
 endif
 
 executable(
