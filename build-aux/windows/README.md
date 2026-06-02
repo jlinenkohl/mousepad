@@ -273,9 +273,20 @@ not a fatal error. Choose an installed Windows monospace font (for example
 Windows builds in this flow use `-Dkeyfile-settings=true`, so settings are
 stored in a local config file instead of desktop dconf/gsettings services.
 
-Default settings file location:
+Default settings file location when launched via `3-run.ps1` or
+`mousepad\\run-mousepad.cmd`:
+
+- `<builddir>\\config-home\\Mousepad\\settings.conf`
+
+Fallback settings file location when `XDG_CONFIG_HOME` is not set:
 
 - `%APPDATA%\Mousepad\settings.conf`
+
+To override the config location per run:
+
+```powershell
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -ConfigHome Q:\tmp\mousepad-config
+```
 
 You can read/write settings directly through `mousepad.exe`:
 

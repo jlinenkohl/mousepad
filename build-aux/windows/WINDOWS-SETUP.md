@@ -229,9 +229,20 @@ This Windows build flow enables `-Dkeyfile-settings=true`, so Mousepad stores
 settings in a local keyfile instead of relying on desktop dconf/gsettings
 services.
 
-Default settings path:
+Default settings path when launched with `build-aux/windows/3-run.ps1` or the
+generated `run-mousepad.cmd`:
+
+- `<builddir>\\config-home\\Mousepad\\settings.conf`
+
+Fallback settings path when `XDG_CONFIG_HOME` is not set:
 
 - `%APPDATA%\Mousepad\settings.conf`
+
+Override per run if needed:
+
+```powershell
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -ConfigHome Q:\tmp\mousepad-config
+```
 
 Use the built-in settings CLI to read/write values:
 

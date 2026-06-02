@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $targetDir = Join-Path $repoRoot "$BuildDir\mousepad"
 $schemaDir = Join-Path $repoRoot "$BuildDir\runtime-schemas"
+$configHomeDir = Join-Path $repoRoot "$BuildDir\config-home"
 $repoThemesDir = Join-Path $repoRoot 'themes'
 $buildThemesDir = Join-Path $repoRoot "$BuildDir\themes"
 $repoLanguageSpecsDir = Join-Path $repoRoot 'language-specs'
@@ -18,6 +19,8 @@ $buildLanguageSpecsDir = Join-Path $repoRoot "$BuildDir\language-specs"
 if (-not (Test-Path $targetDir)) {
   throw "Target directory not found: '$targetDir'. Build first."
 }
+
+New-Item -ItemType Directory -Force -Path $configHomeDir | Out-Null
 
 $gtkBin = Join-Path $GtkPrefix 'bin'
 if (-not (Test-Path $gtkBin)) {
@@ -184,6 +187,7 @@ $cmd = @(
   'setlocal',
   'set "EXE_DIR=%~dp0"',
   'set "PATH=%EXE_DIR%;%PATH%"',
+  'if exist "%EXE_DIR%..\config-home" set "XDG_CONFIG_HOME=%EXE_DIR%..\config-home"',
   'if exist "%EXE_DIR%..\runtime-schemas" set "GSETTINGS_SCHEMA_DIR=%EXE_DIR%..\runtime-schemas"',
   'if exist "%EXE_DIR%..\plugins" set "MOUSEPAD_PLUGIN_DIRECTORY=%EXE_DIR%..\plugins"',
   'if exist "%EXE_DIR%..\themes" set "MOUSEPAD_THEME_DIRECTORY=%EXE_DIR%..\themes"',

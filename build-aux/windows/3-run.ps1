@@ -2,6 +2,7 @@ param(
   [string]$BuildDir = "build-msvc",
   [string]$GtkPrefix = "Q:\gtk3",
   [string]$GettextPrefix = "$env:LOCALAPPDATA\Programs\gettext-iconv",
+  [string]$ConfigHome,
   [switch]$Wait
 )
 
@@ -19,6 +20,12 @@ $repoLanguageSpecsDir = Join-Path $repoRoot 'language-specs'
 if (-not (Test-Path $exePath)) {
   throw "Executable not found at '$exePath'. Run build-aux/windows/2-compile.ps1 first."
 }
+
+if (-not $ConfigHome) {
+  $ConfigHome = Join-Path $repoRoot "$BuildDir\config-home"
+}
+New-Item -ItemType Directory -Force -Path $ConfigHome | Out-Null
+$env:XDG_CONFIG_HOME = $ConfigHome
 
 $gtkBin = Join-Path $GtkPrefix 'bin'
 $gtkShare = Join-Path $GtkPrefix 'share'
@@ -75,6 +82,7 @@ if ((Test-Path $schemaSrc) -and (Test-Path $glibCompileSchemas)) {
 }
 
 Write-Host "Launching $exePath"
+Write-Host "Using XDG_CONFIG_HOME=$ConfigHome"
 if ($Wait) {
   & $exePath
   $exitCode = $LASTEXITCODE
