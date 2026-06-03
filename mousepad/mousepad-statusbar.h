@@ -49,6 +49,10 @@ mousepad_statusbar_set_overwrite (MousepadStatusbar *statusbar,
                                   gboolean overwrite);
 
 void
+mousepad_statusbar_set_column_mode (MousepadStatusbar *statusbar,
+                                    gboolean enabled);
+
+void
 mousepad_statusbar_push_tooltip (MousepadStatusbar *statusbar,
                                  const gchar *tooltip);
 

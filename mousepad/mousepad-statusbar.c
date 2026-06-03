@@ -26,6 +26,10 @@ mousepad_statusbar_overwrite_clicked (GtkWidget *widget,
                                       GdkEventButton *event,
                                       MousepadStatusbar *statusbar);
 static gboolean
+mousepad_statusbar_column_mode_clicked (GtkWidget *widget,
+                                        GdkEventButton *event,
+                                        MousepadStatusbar *statusbar);
+static gboolean
 mousepad_statusbar_filetype_clicked (GtkWidget *widget,
                                      GdkEventButton *event,
                                      MousepadStatusbar *statusbar);
@@ -34,6 +38,7 @@ mousepad_statusbar_filetype_clicked (GtkWidget *widget,
 
 enum
 {
+  ENABLE_COLUMN_MODE,
   ENABLE_OVERWRITE,
   LAST_SIGNAL,
 };
@@ -44,11 +49,13 @@ struct _MousepadStatusbar
 
   /* whether overwrite is enabled */
   guint overwrite_enabled : 1;
+  guint column_mode_enabled : 1;
 
   /* extra labels in the statusbar */
   GtkWidget *language;
   GtkWidget *encoding;
   GtkWidget *position;
+  GtkWidget *column_mode;
   GtkWidget *overwrite;
 };
 
@@ -76,6 +83,13 @@ mousepad_statusbar_class_init (MousepadStatusbarClass *klass)
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
+
+  statusbar_signals[ENABLE_COLUMN_MODE] = g_signal_new (I_ ("enable-column-mode"),
+                                                         G_TYPE_FROM_CLASS (gobject_class),
+                                                         G_SIGNAL_RUN_LAST,
+                                                         0, NULL, NULL,
+                                                         g_cclosure_marshal_VOID__BOOLEAN,
+                                                         G_TYPE_NONE, 1, G_TYPE_BOOLEAN);
 
   statusbar_signals[ENABLE_OVERWRITE] = g_signal_new (I_ ("enable-overwrite"),
                                                       G_TYPE_FROM_CLASS (gobject_class),
@@ -153,6 +167,27 @@ mousepad_statusbar_init (MousepadStatusbar *statusbar)
   gtk_box_pack_start (GTK_BOX (box), separator, FALSE, FALSE, 0);
   gtk_widget_show (separator);
 
+  /* column mode event box */
+  ebox = gtk_event_box_new ();
+  gtk_box_pack_start (GTK_BOX (box), ebox, FALSE, TRUE, 0);
+  gtk_event_box_set_visible_window (GTK_EVENT_BOX (ebox), FALSE);
+  gtk_widget_set_tooltip_text (ebox, _("Toggle the column mode"));
+  g_signal_connect (ebox, "button-press-event",
+                    G_CALLBACK (mousepad_statusbar_column_mode_clicked), statusbar);
+  gtk_widget_show (ebox);
+
+  /* column mode indicator */
+  statusbar->column_mode_enabled = FALSE;
+  statusbar->column_mode = gtk_label_new (_("LNR"));
+  gtk_container_add (GTK_CONTAINER (ebox), statusbar->column_mode);
+  gtk_widget_set_tooltip_text (statusbar->column_mode, _("Selection mode: linear"));
+  gtk_widget_show (statusbar->column_mode);
+
+  /* separator */
+  separator = gtk_separator_new (GTK_ORIENTATION_VERTICAL);
+  gtk_box_pack_start (GTK_BOX (box), separator, FALSE, FALSE, 0);
+  gtk_widget_show (separator);
+
   /* overwrite event box */
   ebox = gtk_event_box_new ();
   gtk_box_pack_start (GTK_BOX (box), ebox, FALSE, TRUE, 0);
@@ -186,6 +221,25 @@ mousepad_statusbar_overwrite_clicked (GtkWidget *widget,
 
   /* send the signal */
   g_signal_emit (statusbar, statusbar_signals[ENABLE_OVERWRITE], 0, statusbar->overwrite_enabled);
+
+  return TRUE;
+}
+
+
+
+static gboolean
+mousepad_statusbar_column_mode_clicked (GtkWidget *widget,
+                                        GdkEventButton *event,
+                                        MousepadStatusbar *statusbar)
+{
+  g_return_val_if_fail (MOUSEPAD_IS_STATUSBAR (statusbar), FALSE);
+
+  if (event->type != GDK_BUTTON_PRESS || event->button != 1)
+    return FALSE;
+
+  statusbar->column_mode_enabled = !statusbar->column_mode_enabled;
+  g_signal_emit (statusbar, statusbar_signals[ENABLE_COLUMN_MODE], 0,
+                 statusbar->column_mode_enabled);
 
   return TRUE;
 }
@@ -292,6 +346,28 @@ mousepad_statusbar_set_overwrite (MousepadStatusbar *statusbar,
   gtk_widget_set_sensitive (statusbar->overwrite, overwrite);
 
   statusbar->overwrite_enabled = overwrite;
+}
+
+
+
+void
+mousepad_statusbar_set_column_mode (MousepadStatusbar *statusbar,
+                                    gboolean enabled)
+{
+  g_return_if_fail (MOUSEPAD_IS_STATUSBAR (statusbar));
+
+  if (enabled)
+    {
+      gtk_label_set_text (GTK_LABEL (statusbar->column_mode), _("COL"));
+      gtk_widget_set_tooltip_text (statusbar->column_mode, _("Selection mode: column"));
+      statusbar->column_mode_enabled = TRUE;
+    }
+  else
+    {
+      gtk_label_set_text (GTK_LABEL (statusbar->column_mode), _("LNR"));
+      gtk_widget_set_tooltip_text (statusbar->column_mode, _("Selection mode: linear"));
+      statusbar->column_mode_enabled = FALSE;
+    }
 }
 
 

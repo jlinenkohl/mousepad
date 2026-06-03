@@ -43,8 +43,32 @@ mousepad_view_drag_motion (GtkWidget *widget,
                            gint x,
                            gint y,
                            guint timestamp);
+static gboolean
+mousepad_view_button_press_event (GtkWidget *widget,
+                                  GdkEventButton *event);
+static gboolean
+mousepad_view_button_release_event (GtkWidget *widget,
+                                    GdkEventButton *event);
+static gboolean
+mousepad_view_motion_notify_event (GtkWidget *widget,
+                                   GdkEventMotion *event);
+static gboolean
+mousepad_view_draw (GtkWidget *widget,
+                    cairo_t *cr);
+static gboolean
+mousepad_view_key_press_event (GtkWidget *widget,
+                               GdkEventKey *event);
+static void
+mousepad_view_realize (GtkWidget *widget);
 
 /* GtkTextView virtual functions */
+static void
+mousepad_view_copy_clipboard (GtkTextView *text_view);
+static void
+mousepad_view_move_cursor (GtkTextView *text_view,
+                           GtkMovementStep step,
+                           gint count,
+                           gboolean extend_selection);
 static void
 mousepad_view_cut_clipboard (GtkTextView *text_view);
 static void
@@ -106,6 +130,72 @@ mousepad_view_set_word_wrap (MousepadView *view,
 static void
 mousepad_view_set_match_braces (MousepadView *view,
                                 gboolean enabled);
+static void
+mousepad_view_set_column_mode (MousepadView *view,
+                               gboolean enabled);
+static void
+mousepad_view_buffer_mark_set (GtkTextBuffer *buffer,
+                               GtkTextIter *location,
+                               GtkTextMark *mark,
+                               MousepadView *view);
+static void
+mousepad_view_update_column_mode_cursor (MousepadView *view);
+static void
+mousepad_view_buffer_insert_text (GtkTextBuffer *buffer,
+                                  GtkTextIter *location,
+                                  gchar *text,
+                                  gint length,
+                                  MousepadView *view);
+static gboolean
+mousepad_view_column_mode_get_bounds (MousepadView *view,
+                                                gint *first_line,
+                                                gint *last_line,
+                                                gint *left_column,
+                                                gint *right_column,
+                                                gboolean *has_width);
+static gboolean
+mousepad_view_column_mode_get_bounds (MousepadView *view,
+                                      gint *first_line,
+                                      gint *last_line,
+                                      gint *left_column,
+                                      gint *right_column,
+                                      gboolean *has_width);
+
+
+
+static gboolean
+mousepad_view_column_mode_get_rectangle_bounds (MousepadView *view,
+                                                GtkTextIter *start,
+                                                GtkTextIter *end,
+                                                gint *first_line,
+                                                gint *last_line,
+                                                gint *left_column,
+                                                gint *right_column);
+static gchar *
+mousepad_view_column_mode_extract_rectangle (MousepadView *view,
+                                             GtkTextIter *start,
+                                             GtkTextIter *end,
+                                             gint first_line,
+                                             gint last_line,
+                                             gint left_column,
+                                             gint right_column);
+static void
+mousepad_view_column_mode_delete_rectangle (MousepadView *view,
+                                            gint first_line,
+                                            gint last_line,
+                                            gint left_column,
+                                            gint right_column);
+static void
+mousepad_view_column_mode_draw_overlay (MousepadView *view,
+                                        cairo_t *cr);
+static gint
+mousepad_view_column_mode_visual_column (MousepadView *view,
+                                         GtkTextIter *iter,
+                                         gint buffer_x);
+static void
+mousepad_view_column_mode_pad_line_to_column (MousepadView *view,
+                                              gint line,
+                                              gint column);
 
 
 
@@ -120,6 +210,18 @@ struct _MousepadView
   gboolean show_line_endings;
   gchar *color_scheme;
   gboolean match_braces;
+  gboolean column_mode;
+  gboolean column_mode_internal_edit;
+  gboolean column_mode_suspended;
+  GtkTextBuffer *connected_buffer;
+  gulong insert_text_handler_id;
+  gulong mark_set_handler_id;
+  gboolean column_mode_rectangle_active;
+  gboolean column_mode_dragging;
+  gint column_mode_anchor_line;
+  gint column_mode_anchor_column;
+  gint column_mode_caret_line;
+  gint column_mode_caret_column;
 };
 
 
@@ -134,6 +236,7 @@ enum
   PROP_COLOR_SCHEME,
   PROP_WORD_WRAP,
   PROP_MATCH_BRACES,
+  PROP_COLUMN_MODE,
   NUM_PROPERTIES
 };
 
@@ -155,7 +258,15 @@ mousepad_view_class_init (MousepadViewClass *klass)
   gobject_class->set_property = mousepad_view_set_property;
 
   widget_class->drag_motion = mousepad_view_drag_motion;
+  widget_class->button_press_event = mousepad_view_button_press_event;
+  widget_class->button_release_event = mousepad_view_button_release_event;
+  widget_class->motion_notify_event = mousepad_view_motion_notify_event;
+  widget_class->draw = mousepad_view_draw;
+  widget_class->key_press_event = mousepad_view_key_press_event;
+  widget_class->realize = mousepad_view_realize;
 
+  textview_class->copy_clipboard = mousepad_view_copy_clipboard;
+  textview_class->move_cursor = mousepad_view_move_cursor;
   textview_class->cut_clipboard = mousepad_view_cut_clipboard;
   textview_class->delete_from_cursor = mousepad_view_delete_from_cursor;
   textview_class->paste_clipboard = mousepad_view_paste_clipboard;
@@ -171,14 +282,14 @@ mousepad_view_class_init (MousepadViewClass *klass)
                                                         "Font",
                                                         "The font to use in the view",
                                                         NULL,
-                                                        G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                        G_PARAM_WRITABLE));
   g_object_class_install_property (gobject_class,
                                    PROP_SHOW_WHITESPACE,
                                    g_param_spec_boolean ("show-whitespace",
                                                          "ShowWhitespace",
                                                          "Whether whitespace is visualized in the view",
                                                          FALSE,
-                                                         G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                         G_PARAM_WRITABLE));
   g_object_class_install_property (gobject_class,
                                    PROP_SPACE_LOCATION,
                                    g_param_spec_flags ("space-location",
@@ -186,35 +297,42 @@ mousepad_view_class_init (MousepadViewClass *klass)
                                                        "The space locations to show in the view",
                                                        GTK_SOURCE_TYPE_SPACE_LOCATION_FLAGS,
                                                        GTK_SOURCE_SPACE_LOCATION_ALL,
-                                                       G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                       G_PARAM_WRITABLE));
   g_object_class_install_property (gobject_class,
                                    PROP_SHOW_LINE_ENDINGS,
                                    g_param_spec_boolean ("show-line-endings",
                                                          "ShowLineEndings",
                                                          "Whether line-endings are visualized in the view",
                                                          FALSE,
-                                                         G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                         G_PARAM_WRITABLE));
   g_object_class_install_property (gobject_class,
                                    PROP_COLOR_SCHEME,
                                    g_param_spec_string ("color-scheme",
                                                         "ColorScheme",
                                                         "The id of the syntax highlighting color scheme to use",
                                                         NULL,
-                                                        G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                        G_PARAM_WRITABLE));
   g_object_class_install_property (gobject_class,
                                    PROP_WORD_WRAP,
                                    g_param_spec_boolean ("word-wrap",
                                                          "WordWrap",
                                                          "Whether to virtually wrap long lines in the view",
                                                          FALSE,
-                                                         G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                         G_PARAM_WRITABLE));
   g_object_class_install_property (gobject_class,
                                    PROP_MATCH_BRACES,
                                    g_param_spec_boolean ("match-braces",
                                                          "MatchBraces",
                                                          "Whether to highlight matching braces, parens, brackets, etc.",
                                                          FALSE,
-                                                         G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+                                                         G_PARAM_WRITABLE));
+  g_object_class_install_property (gobject_class,
+                                   PROP_COLUMN_MODE,
+                                   g_param_spec_boolean ("column-mode",
+                                                         "ColumnMode",
+                                                         "Whether experimental column mode is enabled",
+                                                         FALSE,
+                                                         G_PARAM_WRITABLE));
 }
 
 
@@ -225,6 +343,27 @@ mousepad_view_buffer_changed (MousepadView *view,
                               gpointer user_data)
 {
   GtkSourceBuffer *buffer;
+
+  if (view->connected_buffer != NULL && G_IS_OBJECT (view->connected_buffer)
+      && view->insert_text_handler_id != 0)
+    {
+      g_signal_handler_disconnect (view->connected_buffer, view->insert_text_handler_id);
+      view->insert_text_handler_id = 0;
+    }
+
+  if (view->connected_buffer != NULL && G_IS_OBJECT (view->connected_buffer)
+      && view->mark_set_handler_id != 0)
+    {
+      g_signal_handler_disconnect (view->connected_buffer, view->mark_set_handler_id);
+      view->mark_set_handler_id = 0;
+    }
+
+  if (view->connected_buffer != NULL && G_IS_OBJECT (view->connected_buffer))
+    g_object_remove_weak_pointer (G_OBJECT (view->connected_buffer),
+                                  (gpointer *) &view->connected_buffer);
+
+  view->connected_buffer = NULL;
+
   buffer = GTK_SOURCE_BUFFER (gtk_text_view_get_buffer (GTK_TEXT_VIEW (view)));
 
   if (buffer != NULL)
@@ -246,6 +385,15 @@ mousepad_view_buffer_changed (MousepadView *view,
       gtk_source_buffer_set_style_scheme (buffer, scheme);
       gtk_source_buffer_set_highlight_syntax (buffer, enable_highlight);
       gtk_source_buffer_set_highlight_matching_brackets (buffer, view->match_braces);
+
+      view->connected_buffer = GTK_TEXT_BUFFER (buffer);
+        g_object_add_weak_pointer (G_OBJECT (buffer), (gpointer *) &view->connected_buffer);
+      view->insert_text_handler_id = g_signal_connect (buffer, "insert-text",
+                                                       G_CALLBACK (mousepad_view_buffer_insert_text),
+                                                       view);
+        view->mark_set_handler_id = g_signal_connect (buffer, "mark-set",
+                              G_CALLBACK (mousepad_view_buffer_mark_set),
+                              view);
     }
 }
 
@@ -288,6 +436,18 @@ mousepad_view_init (MousepadView *view)
   view->show_line_endings = FALSE;
   view->color_scheme = g_strdup ("none");
   view->match_braces = FALSE;
+  view->column_mode = FALSE;
+  view->column_mode_internal_edit = FALSE;
+  view->column_mode_suspended = FALSE;
+  view->connected_buffer = NULL;
+  view->insert_text_handler_id = 0;
+  view->mark_set_handler_id = 0;
+  view->column_mode_rectangle_active = FALSE;
+  view->column_mode_dragging = FALSE;
+  view->column_mode_anchor_line = 0;
+  view->column_mode_anchor_column = 0;
+  view->column_mode_caret_line = 0;
+  view->column_mode_caret_column = 0;
 
   /* make sure any buffers set on the view get the color scheme applied to them */
   g_signal_connect (view, "notify::buffer",
@@ -314,6 +474,7 @@ mousepad_view_init (MousepadView *view)
   BIND_ (COLOR_SCHEME, "color-scheme");
   BIND_ (WORD_WRAP, "word-wrap");
   BIND_ (MATCH_BRACES, "match-braces");
+  BIND_ (COLUMN_MODE, "column-mode");
 
 #undef BIND_
 
@@ -333,6 +494,26 @@ static void
 mousepad_view_finalize (GObject *object)
 {
   MousepadView *view = MOUSEPAD_VIEW (object);
+
+  if (view->connected_buffer != NULL && G_IS_OBJECT (view->connected_buffer)
+      && view->insert_text_handler_id != 0)
+    {
+      g_signal_handler_disconnect (view->connected_buffer, view->insert_text_handler_id);
+      view->insert_text_handler_id = 0;
+    }
+
+  if (view->connected_buffer != NULL && G_IS_OBJECT (view->connected_buffer)
+      && view->mark_set_handler_id != 0)
+    {
+      g_signal_handler_disconnect (view->connected_buffer, view->mark_set_handler_id);
+      view->mark_set_handler_id = 0;
+    }
+
+  if (view->connected_buffer != NULL && G_IS_OBJECT (view->connected_buffer))
+    g_object_remove_weak_pointer (G_OBJECT (view->connected_buffer),
+                                  (gpointer *) &view->connected_buffer);
+
+  view->connected_buffer = NULL;
 
   /* cleanup color scheme name */
   g_free (view->color_scheme);
@@ -373,6 +554,9 @@ mousepad_view_set_property (GObject *object,
     case PROP_MATCH_BRACES:
       mousepad_view_set_match_braces (view, g_value_get_boolean (value));
       break;
+    case PROP_COLUMN_MODE:
+      mousepad_view_set_column_mode (view, g_value_get_boolean (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -409,9 +593,756 @@ mousepad_view_drag_motion (GtkWidget *widget,
 
 
 
+static gboolean
+mousepad_view_button_press_event (GtkWidget *widget,
+                                  GdkEventButton *event)
+{
+  MousepadView *view = MOUSEPAD_VIEW (widget);
+
+  if (view->column_mode
+      && event->type == GDK_BUTTON_PRESS
+      && event->button == 1)
+    {
+      GtkTextBuffer *buffer;
+      GtkTextIter iter;
+      gint bx, by;
+
+      buffer = mousepad_view_get_buffer (view);
+      gtk_text_view_window_to_buffer_coords (GTK_TEXT_VIEW (view), GTK_TEXT_WINDOW_TEXT,
+                                             (gint) event->x, (gint) event->y,
+                                             &bx, &by);
+      gtk_text_view_get_iter_at_location (GTK_TEXT_VIEW (view), &iter, bx, by);
+
+      view->column_mode_anchor_line = gtk_text_iter_get_line (&iter);
+      view->column_mode_anchor_column = mousepad_view_column_mode_visual_column (view, &iter, bx);
+      view->column_mode_caret_line = view->column_mode_anchor_line;
+      view->column_mode_caret_column = view->column_mode_anchor_column;
+      view->column_mode_rectangle_active = TRUE;
+      view->column_mode_dragging = TRUE;
+
+      gtk_text_buffer_place_cursor (buffer, &iter);
+      gtk_text_buffer_select_range (buffer, &iter, &iter);
+      gtk_widget_queue_draw (widget);
+      return TRUE;
+    }
+
+  return GTK_WIDGET_CLASS (mousepad_view_parent_class)->button_press_event (widget, event);
+}
+
+
+
+static gboolean
+mousepad_view_button_release_event (GtkWidget *widget,
+                                    GdkEventButton *event)
+{
+  MousepadView *view = MOUSEPAD_VIEW (widget);
+
+  if (view->column_mode && event->button == 1)
+    {
+      view->column_mode_dragging = FALSE;
+      return TRUE;
+    }
+
+  return GTK_WIDGET_CLASS (mousepad_view_parent_class)->button_release_event (widget, event);
+}
+
+
+
+static gboolean
+mousepad_view_motion_notify_event (GtkWidget *widget,
+                                   GdkEventMotion *event)
+{
+  MousepadView *view = MOUSEPAD_VIEW (widget);
+
+  if (view->column_mode
+      && view->column_mode_dragging
+      && (event->state & GDK_BUTTON1_MASK) != 0)
+    {
+      GtkTextBuffer *buffer;
+      GtkTextIter iter;
+      gint bx, by;
+
+      buffer = mousepad_view_get_buffer (view);
+      gtk_text_view_window_to_buffer_coords (GTK_TEXT_VIEW (view), GTK_TEXT_WINDOW_TEXT,
+                                             (gint) event->x, (gint) event->y,
+                                             &bx, &by);
+      gtk_text_view_get_iter_at_location (GTK_TEXT_VIEW (view), &iter, bx, by);
+
+      view->column_mode_caret_line = gtk_text_iter_get_line (&iter);
+      view->column_mode_caret_column = mousepad_view_column_mode_visual_column (view, &iter, bx);
+
+      gtk_text_buffer_place_cursor (buffer, &iter);
+      gtk_text_buffer_select_range (buffer, &iter, &iter);
+      gtk_widget_queue_draw (widget);
+      return TRUE;
+    }
+
+  return GTK_WIDGET_CLASS (mousepad_view_parent_class)->motion_notify_event (widget, event);
+}
+
+
+
+static void
+mousepad_view_move_cursor (GtkTextView *text_view,
+                           GtkMovementStep step,
+                           gint count,
+                           gboolean extend_selection)
+{
+  MousepadView *view = MOUSEPAD_VIEW (text_view);
+  GtkTextBuffer *buffer;
+  GtkTextIter iter;
+
+  if (!view->column_mode)
+    {
+      GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->move_cursor (text_view, step, count, extend_selection);
+      return;
+    }
+
+  buffer = mousepad_view_get_buffer (view);
+
+  if (extend_selection)
+    {
+      if (!view->column_mode_rectangle_active)
+        {
+          gtk_text_buffer_get_iter_at_mark (buffer, &iter, gtk_text_buffer_get_insert (buffer));
+          view->column_mode_anchor_line = gtk_text_iter_get_line (&iter);
+          view->column_mode_anchor_column = mousepad_util_get_real_line_offset (&iter);
+          view->column_mode_rectangle_active = TRUE;
+        }
+
+      GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->move_cursor (text_view, step, count, FALSE);
+
+      gtk_text_buffer_get_iter_at_mark (buffer, &iter, gtk_text_buffer_get_insert (buffer));
+      view->column_mode_caret_line = gtk_text_iter_get_line (&iter);
+      view->column_mode_caret_column = mousepad_util_get_real_line_offset (&iter);
+
+      gtk_text_buffer_select_range (buffer, &iter, &iter);
+      gtk_widget_queue_draw (GTK_WIDGET (view));
+      return;
+    }
+
+  GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->move_cursor (text_view, step, count, FALSE);
+
+  if (view->column_mode_rectangle_active)
+    {
+      gtk_text_buffer_get_iter_at_mark (buffer, &iter, gtk_text_buffer_get_insert (buffer));
+      view->column_mode_anchor_line = gtk_text_iter_get_line (&iter);
+      view->column_mode_caret_line = view->column_mode_anchor_line;
+      view->column_mode_anchor_column = mousepad_util_get_real_line_offset (&iter);
+      view->column_mode_caret_column = view->column_mode_anchor_column;
+      view->column_mode_rectangle_active = FALSE;
+      gtk_text_buffer_select_range (buffer, &iter, &iter);
+      gtk_widget_queue_draw (GTK_WIDGET (view));
+    }
+}
+
+
+
+static gboolean
+mousepad_view_draw (GtkWidget *widget,
+                    cairo_t *cr)
+{
+  gboolean handled;
+
+  handled = GTK_WIDGET_CLASS (mousepad_view_parent_class)->draw (widget, cr);
+  mousepad_view_column_mode_draw_overlay (MOUSEPAD_VIEW (widget), cr);
+
+  return handled;
+}
+
+
+
+static gboolean
+mousepad_view_key_press_event (GtkWidget *widget,
+                               GdkEventKey *event)
+{
+  MousepadView *view = MOUSEPAD_VIEW (widget);
+
+  if (view->column_mode
+      && (event->state & (GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SUPER_MASK | GDK_META_MASK)) == 0
+      && (event->keyval == GDK_KEY_Tab
+          || event->keyval == GDK_KEY_ISO_Left_Tab))
+    {
+      GtkTextBuffer *buffer = mousepad_view_get_buffer (view);
+      gint first_line, last_line, left_column, right_column;
+      gboolean has_width;
+
+      if (mousepad_view_column_mode_get_bounds (view,
+                                                &first_line,
+                                                &last_line,
+                                                &left_column,
+                                                &right_column,
+                                                &has_width))
+        {
+          gint indent_width_setting = MOUSEPAD_SETTING_GET_INT (INDENT_WIDTH);
+          gint indent_width = (indent_width_setting > 0)
+                              ? indent_width_setting
+                              : (gint) MOUSEPAD_SETTING_GET_UINT (TAB_WIDTH);
+          indent_width = MAX (1, indent_width);
+          gboolean reverse = (event->keyval == GDK_KEY_ISO_Left_Tab
+                              || ((event->state & GDK_SHIFT_MASK) != 0));
+
+          gtk_text_buffer_begin_user_action (buffer);
+          view->column_mode_internal_edit = TRUE;
+
+          if (reverse)
+            {
+              gint line;
+              gint min_removed = -1;
+
+              for (line = first_line; line <= last_line; ++line)
+                {
+                  GtkTextIter line_iter;
+                  GtkTextIter del_start, del_end;
+                  GtkTextIter line_end_iter;
+                  gint line_end_column;
+                  gint delete_end_column;
+                  gint removed = 0;
+
+                  gtk_text_buffer_get_iter_at_line (buffer, &line_iter, line);
+                  line_end_iter = line_iter;
+                  if (!gtk_text_iter_ends_line (&line_end_iter))
+                    gtk_text_iter_forward_to_line_end (&line_end_iter);
+                  line_end_column = mousepad_util_get_real_line_offset (&line_end_iter);
+
+                  if (left_column == 0)
+                    {
+                      del_start = line_iter;
+                      del_end = line_iter;
+
+                      while (removed < indent_width && !gtk_text_iter_ends_line (&del_end))
+                        {
+                          gunichar ch = gtk_text_iter_get_char (&del_end);
+
+                          if (ch != ' ' && ch != '\t')
+                            break;
+
+                          gtk_text_iter_forward_char (&del_end);
+                          removed++;
+                        }
+
+                      if (gtk_text_iter_compare (&del_start, &del_end) < 0)
+                        gtk_text_buffer_delete (buffer, &del_start, &del_end);
+
+                      min_removed = (min_removed < 0) ? removed : MIN (min_removed, removed);
+                      continue;
+                    }
+
+                  delete_end_column = MIN (left_column, line_end_column);
+                  if (delete_end_column <= 0)
+                    {
+                      min_removed = (min_removed < 0) ? 0 : MIN (min_removed, 0);
+                      continue;
+                    }
+
+                  del_end = line_iter;
+                  mousepad_util_set_real_line_offset (&del_end, delete_end_column, TRUE);
+                  del_start = del_end;
+
+                  while (removed < indent_width)
+                    {
+                      GtkTextIter prev = del_start;
+                      gunichar ch;
+
+                      if (!gtk_text_iter_backward_char (&prev))
+                        break;
+
+                      ch = gtk_text_iter_get_char (&prev);
+                      if (ch != ' ' && ch != '\t')
+                        break;
+
+                      del_start = prev;
+                      removed++;
+                    }
+
+                  if (gtk_text_iter_compare (&del_start, &del_end) < 0)
+                    gtk_text_buffer_delete (buffer, &del_start, &del_end);
+
+                  min_removed = (min_removed < 0) ? removed : MIN (min_removed, removed);
+                }
+
+              left_column = MAX (0, left_column - MAX (0, min_removed));
+            }
+          else
+            {
+              gint line;
+              gchar *insert_text;
+
+              /* In column mode, keep horizontal shifts deterministic across lines. */
+              insert_text = g_strnfill (indent_width, ' ');
+
+              if (insert_text != NULL)
+                {
+                  gint shift = indent_width;
+
+                  for (line = first_line; line <= last_line; ++line)
+                    {
+                      GtkTextIter iter;
+
+                      mousepad_view_column_mode_pad_line_to_column (view, line, left_column);
+                      gtk_text_buffer_get_iter_at_line (buffer, &iter, line);
+                      mousepad_util_set_real_line_offset (&iter, left_column, FALSE);
+                      gtk_text_buffer_insert (buffer, &iter, insert_text, -1);
+                    }
+
+                  left_column += MAX (1, shift);
+                  g_free (insert_text);
+                }
+            }
+
+          {
+            GtkTextIter iter;
+
+            gtk_text_buffer_get_iter_at_line (buffer, &iter, last_line);
+            mousepad_util_set_real_line_offset (&iter, left_column, FALSE);
+            gtk_text_buffer_place_cursor (buffer, &iter);
+            gtk_text_buffer_select_range (buffer, &iter, &iter);
+          }
+
+          view->column_mode_internal_edit = FALSE;
+          gtk_text_buffer_end_user_action (buffer);
+
+          view->column_mode_anchor_line = first_line;
+          view->column_mode_caret_line = last_line;
+          view->column_mode_anchor_column = left_column;
+          view->column_mode_caret_column = left_column;
+          view->column_mode_rectangle_active = TRUE;
+
+          gtk_widget_queue_draw (widget);
+          mousepad_view_scroll_to_cursor (view);
+          return TRUE;
+        }
+    }
+
+  if (view->column_mode
+      && (event->state & (GDK_CONTROL_MASK | GDK_MOD1_MASK | GDK_SUPER_MASK | GDK_META_MASK)) == 0
+      && (event->keyval == GDK_KEY_BackSpace
+          || event->keyval == GDK_KEY_Delete
+          || event->keyval == GDK_KEY_KP_Delete))
+    {
+      gint count = (event->keyval == GDK_KEY_BackSpace) ? -1 : 1;
+      mousepad_view_delete_from_cursor (GTK_TEXT_VIEW (view), GTK_DELETE_CHARS, count);
+      return TRUE;
+    }
+
+  return GTK_WIDGET_CLASS (mousepad_view_parent_class)->key_press_event (widget, event);
+}
+
+
+
+static void
+mousepad_view_realize (GtkWidget *widget)
+{
+  GTK_WIDGET_CLASS (mousepad_view_parent_class)->realize (widget);
+  mousepad_view_update_column_mode_cursor (MOUSEPAD_VIEW (widget));
+}
+
+
+
+static void
+mousepad_view_buffer_mark_set (GtkTextBuffer *buffer,
+                               GtkTextIter *location,
+                               GtkTextMark *mark,
+                               MousepadView *view)
+{
+  GtkTextIter insert_iter, bound_iter;
+
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+  (void) location;
+
+  if (view->column_mode_suspended)
+    return;
+
+  if (!view->column_mode)
+    return;
+
+  if (view->column_mode_rectangle_active
+      && !view->column_mode_internal_edit
+      && (mark == gtk_text_buffer_get_insert (buffer)
+          || mark == gtk_text_buffer_get_selection_bound (buffer)))
+    {
+      gtk_text_buffer_get_iter_at_mark (buffer, &insert_iter, gtk_text_buffer_get_insert (buffer));
+      gtk_text_buffer_get_iter_at_mark (buffer, &bound_iter, gtk_text_buffer_get_selection_bound (buffer));
+      if (!gtk_text_iter_equal (&insert_iter, &bound_iter))
+        {
+          view->column_mode_internal_edit = TRUE;
+          gtk_text_buffer_select_range (buffer, &insert_iter, &insert_iter);
+          view->column_mode_internal_edit = FALSE;
+        }
+    }
+
+  if (mark == gtk_text_buffer_get_insert (buffer)
+      || mark == gtk_text_buffer_get_selection_bound (buffer))
+    gtk_widget_queue_draw (GTK_WIDGET (view));
+}
+
+
+
+static gboolean
+mousepad_view_column_mode_get_bounds (MousepadView *view,
+                                      gint *first_line,
+                                      gint *last_line,
+                                      gint *left_column,
+                                      gint *right_column,
+                                      gboolean *has_width)
+{
+  GtkTextBuffer *buffer;
+  GtkTextIter start, end;
+  gint start_line, end_line;
+  gint start_column, end_column;
+
+  g_return_val_if_fail (MOUSEPAD_IS_VIEW (view), FALSE);
+
+  if (!view->column_mode)
+    return FALSE;
+
+  if (view->column_mode_rectangle_active)
+    {
+      start_line = view->column_mode_anchor_line;
+      end_line = view->column_mode_caret_line;
+      start_column = view->column_mode_anchor_column;
+      end_column = view->column_mode_caret_column;
+    }
+  else
+    {
+      buffer = mousepad_view_get_buffer (view);
+      if (!gtk_text_buffer_get_selection_bounds (buffer, &start, &end))
+        return FALSE;
+
+      start_line = gtk_text_iter_get_line (&start);
+      end_line = gtk_text_iter_get_line (&end);
+      start_column = mousepad_util_get_real_line_offset (&start);
+      end_column = mousepad_util_get_real_line_offset (&end);
+    }
+
+  if (start_line == end_line)
+    return FALSE;
+
+  if (first_line != NULL)
+    *first_line = MIN (start_line, end_line);
+  if (last_line != NULL)
+    *last_line = MAX (start_line, end_line);
+  if (left_column != NULL)
+    *left_column = MIN (start_column, end_column);
+  if (right_column != NULL)
+    *right_column = MAX (start_column, end_column);
+  if (has_width != NULL)
+    *has_width = (start_column != end_column);
+
+  return TRUE;
+}
+
+
+
+static gboolean
+mousepad_view_column_mode_get_rectangle_bounds (MousepadView *view,
+                                                GtkTextIter *start,
+                                                GtkTextIter *end,
+                                                gint *first_line,
+                                                gint *last_line,
+                                                gint *left_column,
+                                                gint *right_column)
+{
+  gboolean has_width;
+
+  g_return_val_if_fail (MOUSEPAD_IS_VIEW (view), FALSE);
+  g_return_val_if_fail (start != NULL, FALSE);
+  g_return_val_if_fail (end != NULL, FALSE);
+
+  if (!mousepad_view_column_mode_get_bounds (view,
+                                             first_line,
+                                             last_line,
+                                             left_column,
+                                             right_column,
+                                             &has_width)
+      || !has_width)
+    return FALSE;
+
+  gtk_text_buffer_get_iter_at_mark (mousepad_view_get_buffer (view), start,
+                                    gtk_text_buffer_get_selection_bound (mousepad_view_get_buffer (view)));
+  gtk_text_buffer_get_iter_at_mark (mousepad_view_get_buffer (view), end,
+                                    gtk_text_buffer_get_insert (mousepad_view_get_buffer (view)));
+
+  return TRUE;
+}
+
+
+
+static void
+mousepad_view_buffer_insert_text (GtkTextBuffer *buffer,
+                                  GtkTextIter *location,
+                                  gchar *text,
+                                  gint length,
+                                  MousepadView *view)
+{
+  GtkTextIter iter;
+  gchar *replacement;
+  gint first_line, last_line, left_column, right_column;
+  gboolean has_width;
+  gboolean overwrite;
+  gint replacement_chars;
+  gint line;
+  const gchar *p;
+
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+
+  (void) location;
+
+  if (view->column_mode_internal_edit
+      || view->column_mode_suspended
+      || !view->column_mode
+      || !gtk_text_view_get_editable (GTK_TEXT_VIEW (view))
+      || text == NULL
+      || length <= 0)
+    return;
+
+  if (memchr (text, '\n', length) != NULL || memchr (text, '\r', length) != NULL)
+    return;
+
+  if (!mousepad_view_column_mode_get_bounds (view,
+                                             &first_line,
+                                             &last_line,
+                                             &left_column,
+                                             &right_column,
+                                             NULL))
+    return;
+  has_width = (left_column != right_column);
+
+  replacement = g_strndup (text, length);
+  if (replacement == NULL)
+    return;
+
+  overwrite = gtk_text_view_get_overwrite (GTK_TEXT_VIEW (view));
+  replacement_chars = 0;
+  for (p = replacement; *p != '\0'; p = g_utf8_next_char (p))
+    replacement_chars++;
+
+  view->column_mode_internal_edit = TRUE;
+  g_signal_stop_emission_by_name (buffer, "insert-text");
+  gtk_text_buffer_begin_user_action (buffer);
+
+  if (has_width)
+    mousepad_view_column_mode_delete_rectangle (view, first_line, last_line,
+                                                left_column, right_column);
+
+  for (line = first_line; line <= last_line; ++line)
+    {
+      GtkTextIter overwrite_end;
+      gint i;
+
+      mousepad_view_column_mode_pad_line_to_column (view, line, left_column);
+      gtk_text_buffer_get_iter_at_line (buffer, &iter, line);
+      mousepad_util_set_real_line_offset (&iter, left_column, FALSE);
+
+      if (!has_width && overwrite && replacement_chars > 0)
+        {
+          overwrite_end = iter;
+          for (i = 0; i < replacement_chars; ++i)
+            {
+              if (gtk_text_iter_ends_line (&overwrite_end))
+                break;
+
+              if (!gtk_text_iter_forward_char (&overwrite_end))
+                break;
+            }
+
+          if (gtk_text_iter_compare (&iter, &overwrite_end) < 0)
+            gtk_text_buffer_delete (buffer, &iter, &overwrite_end);
+        }
+
+      gtk_text_buffer_insert (buffer, &iter, replacement, -1);
+    }
+
+  gtk_text_buffer_place_cursor (buffer, &iter);
+  view->column_mode_anchor_line = first_line;
+  view->column_mode_caret_line = last_line;
+  view->column_mode_anchor_column = left_column + replacement_chars;
+  view->column_mode_caret_column = view->column_mode_anchor_column;
+  view->column_mode_rectangle_active = TRUE;
+  gtk_text_buffer_select_range (buffer, &iter, &iter);
+  gtk_text_buffer_end_user_action (buffer);
+  view->column_mode_internal_edit = FALSE;
+
+  g_free (replacement);
+
+  mousepad_view_scroll_to_cursor (view);
+}
+
+
+
+static gchar *
+mousepad_view_column_mode_extract_rectangle (MousepadView *view,
+                                             GtkTextIter *start,
+                                             GtkTextIter *end,
+                                             gint first_line,
+                                             gint last_line,
+                                             gint left_column,
+                                             gint right_column)
+{
+  GtkTextBuffer *buffer;
+  GString *text;
+  GtkTextIter line_start;
+  gint line;
+
+  g_return_val_if_fail (MOUSEPAD_IS_VIEW (view), NULL);
+
+  buffer = mousepad_view_get_buffer (view);
+  text = g_string_sized_new (64);
+
+  for (line = first_line; line <= last_line; ++line)
+    {
+      gtk_text_buffer_get_iter_at_line (buffer, &line_start, line);
+
+      *start = line_start;
+      *end = line_start;
+      mousepad_util_set_real_line_offset (start, left_column, FALSE);
+      mousepad_util_set_real_line_offset (end, right_column, FALSE);
+
+      if (gtk_text_iter_compare (start, end) < 0)
+        {
+          gchar *slice;
+
+          slice = gtk_text_buffer_get_text (buffer, start, end, TRUE);
+          if (slice != NULL)
+            {
+              g_string_append (text, slice);
+              g_free (slice);
+            }
+        }
+
+      if (line < last_line)
+        g_string_append_c (text, '\n');
+    }
+
+  return g_string_free (text, FALSE);
+}
+
+
+
+static void
+mousepad_view_column_mode_delete_rectangle (MousepadView *view,
+                                            gint first_line,
+                                            gint last_line,
+                                            gint left_column,
+                                            gint right_column)
+{
+  GtkTextBuffer *buffer;
+  GtkTextIter start, end, line_start;
+  gint line;
+  gboolean old_internal_edit;
+
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+
+  buffer = mousepad_view_get_buffer (view);
+  old_internal_edit = view->column_mode_internal_edit;
+  view->column_mode_internal_edit = TRUE;
+
+  for (line = first_line; line <= last_line; ++line)
+    {
+      gtk_text_buffer_get_iter_at_line (buffer, &line_start, line);
+
+      start = line_start;
+      end = line_start;
+      mousepad_util_set_real_line_offset (&start, left_column, FALSE);
+      mousepad_util_set_real_line_offset (&end, right_column, FALSE);
+
+      if (gtk_text_iter_compare (&start, &end) < 0)
+        gtk_text_buffer_delete (buffer, &start, &end);
+    }
+
+  view->column_mode_internal_edit = old_internal_edit;
+}
+
+
+
+static void
+mousepad_view_copy_clipboard (GtkTextView *text_view)
+{
+  MousepadView *view = MOUSEPAD_VIEW (text_view);
+  GtkTextIter start, end;
+  gint first_line, last_line, left_column, right_column;
+
+  if (mousepad_view_column_mode_get_rectangle_bounds (view, &start, &end,
+                                                      &first_line, &last_line,
+                                                      &left_column, &right_column))
+    {
+      GtkClipboard *clipboard;
+      gchar *text;
+
+      text = mousepad_view_column_mode_extract_rectangle (view, &start, &end,
+                                                          first_line, last_line,
+                                                          left_column, right_column);
+      if (text != NULL)
+        {
+          clipboard = gtk_widget_get_clipboard (GTK_WIDGET (view), GDK_SELECTION_CLIPBOARD);
+          gtk_clipboard_set_text (clipboard, text, -1);
+          g_free (text);
+        }
+
+      return;
+    }
+
+  GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->copy_clipboard (text_view);
+}
+
+
+
 static void
 mousepad_view_cut_clipboard (GtkTextView *text_view)
 {
+  MousepadView *view = MOUSEPAD_VIEW (text_view);
+  GtkTextIter start, end;
+  gint first_line, last_line, left_column, right_column;
+
+  if (mousepad_view_column_mode_get_rectangle_bounds (view, &start, &end,
+                                                      &first_line, &last_line,
+                                                      &left_column, &right_column))
+    {
+      if (!gtk_text_view_get_editable (GTK_TEXT_VIEW (view)))
+        {
+          GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->cut_clipboard (text_view);
+          mousepad_view_scroll_to_cursor (view);
+          return;
+        }
+
+      GtkClipboard *clipboard;
+      GtkTextBuffer *buffer;
+      gchar *text;
+
+      text = mousepad_view_column_mode_extract_rectangle (view, &start, &end,
+                                                          first_line, last_line,
+                                                          left_column, right_column);
+      if (text != NULL)
+        {
+          clipboard = gtk_widget_get_clipboard (GTK_WIDGET (view), GDK_SELECTION_CLIPBOARD);
+          gtk_clipboard_set_text (clipboard, text, -1);
+          g_free (text);
+        }
+
+      buffer = mousepad_view_get_buffer (view);
+      gtk_text_buffer_begin_user_action (buffer);
+      mousepad_view_column_mode_delete_rectangle (view, first_line, last_line,
+                                                  left_column, right_column);
+      {
+        GtkTextIter iter;
+
+        gtk_text_buffer_get_iter_at_line (buffer, &iter, last_line);
+        mousepad_util_set_real_line_offset (&iter, left_column, FALSE);
+        gtk_text_buffer_place_cursor (buffer, &iter);
+        gtk_text_buffer_select_range (buffer, &iter, &iter);
+      }
+      gtk_text_buffer_end_user_action (buffer);
+
+      view->column_mode_anchor_line = first_line;
+      view->column_mode_caret_line = last_line;
+      view->column_mode_anchor_column = left_column;
+      view->column_mode_caret_column = left_column;
+      view->column_mode_rectangle_active = TRUE;
+
+      mousepad_view_scroll_to_cursor (view);
+      return;
+    }
+
   /* let GTK do the main job */
   GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->cut_clipboard (text_view);
 
@@ -426,11 +1357,161 @@ mousepad_view_delete_from_cursor (GtkTextView *text_view,
                                   GtkDeleteType type,
                                   int count)
 {
+  MousepadView *view = MOUSEPAD_VIEW (text_view);
   GtkTextBuffer *buffer;
   GtkTextIter iter, start, end;
   GtkTextMark *start_mark, *end_mark;
   gchar *text = NULL, *eol;
   gint line, column, n_lines;
+
+  if (view->column_mode_suspended)
+    {
+      GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->delete_from_cursor (text_view, type, count);
+      mousepad_view_scroll_to_cursor (view);
+      return;
+    }
+
+  if (type == GTK_DELETE_CHARS && view->column_mode)
+    {
+      gint first_line, last_line, left_column, right_column;
+      gboolean has_width;
+
+      if (mousepad_view_column_mode_get_bounds (view,
+                                                &first_line,
+                                                &last_line,
+                                                &left_column,
+                                                &right_column,
+                                                &has_width))
+        {
+          gint target_column;
+          gint line_idx;
+
+          target_column = left_column;
+          if (!has_width && count < 0)
+            target_column = MAX (0, left_column + count);
+
+          buffer = mousepad_view_get_buffer (view);
+          gtk_text_buffer_begin_user_action (buffer);
+
+          if (has_width)
+            {
+              mousepad_view_column_mode_delete_rectangle (view, first_line, last_line,
+                                                          left_column, right_column);
+              target_column = left_column;
+            }
+          else
+            {
+              gint amount = ABS (count);
+              gboolean old_internal_edit = view->column_mode_internal_edit;
+
+              view->column_mode_internal_edit = TRUE;
+
+              for (line_idx = first_line; line_idx <= last_line; ++line_idx)
+                {
+                  GtkTextIter del_start, del_end, line_iter;
+                  gint i;
+
+                  gtk_text_buffer_get_iter_at_line (buffer, &line_iter, line_idx);
+                  del_start = line_iter;
+                  del_end = line_iter;
+
+                  if (count < 0)
+                    {
+                      gint line_end_column;
+                      gint delete_end_column;
+                      gint delete_start_column;
+
+                      if (!gtk_text_iter_ends_line (&line_iter))
+                        {
+                          GtkTextIter line_end_iter = line_iter;
+                          gtk_text_iter_forward_to_line_end (&line_end_iter);
+                          line_end_column = mousepad_util_get_real_line_offset (&line_end_iter);
+                        }
+                      else
+                        {
+                          line_end_column = 0;
+                        }
+
+                      delete_end_column = MIN (left_column, line_end_column);
+                      delete_start_column = MAX (0, delete_end_column - amount);
+
+                      mousepad_util_set_real_line_offset (&del_start, delete_start_column, FALSE);
+                      mousepad_util_set_real_line_offset (&del_end, delete_end_column, FALSE);
+                    }
+                  else
+                    {
+                      mousepad_util_set_real_line_offset (&del_start, left_column, FALSE);
+                      del_end = del_start;
+                      for (i = 0; i < amount; ++i)
+                        {
+                          if (gtk_text_iter_ends_line (&del_end))
+                            break;
+                          if (!gtk_text_iter_forward_char (&del_end))
+                            break;
+                        }
+                    }
+
+                  if (gtk_text_iter_compare (&del_start, &del_end) < 0)
+                    gtk_text_buffer_delete (buffer, &del_start, &del_end);
+                }
+
+                  view->column_mode_internal_edit = old_internal_edit;
+            }
+
+          {
+            GtkTextIter iter;
+
+            gtk_text_buffer_get_iter_at_line (buffer, &iter, last_line);
+            mousepad_util_set_real_line_offset (&iter, target_column, FALSE);
+            gtk_text_buffer_place_cursor (buffer, &iter);
+            gtk_text_buffer_select_range (buffer, &iter, &iter);
+          }
+
+          gtk_text_buffer_end_user_action (buffer);
+
+          view->column_mode_anchor_line = first_line;
+          view->column_mode_caret_line = last_line;
+          view->column_mode_anchor_column = target_column;
+          view->column_mode_caret_column = target_column;
+          view->column_mode_rectangle_active = TRUE;
+
+          mousepad_view_scroll_to_cursor (view);
+          return;
+        }
+    }
+
+  if (type == GTK_DELETE_CHARS || type == GTK_DELETE_WORD_ENDS || type == GTK_DELETE_WORDS)
+    {
+      gint first_line, last_line, left_column, right_column;
+
+      if (mousepad_view_column_mode_get_rectangle_bounds (view, &start, &end,
+                                                          &first_line, &last_line,
+                                                          &left_column, &right_column))
+        {
+          buffer = mousepad_view_get_buffer (view);
+          gtk_text_buffer_begin_user_action (buffer);
+          mousepad_view_column_mode_delete_rectangle (view, first_line, last_line,
+                                                      left_column, right_column);
+          {
+            GtkTextIter iter;
+
+            gtk_text_buffer_get_iter_at_line (buffer, &iter, last_line);
+            mousepad_util_set_real_line_offset (&iter, left_column, FALSE);
+            gtk_text_buffer_place_cursor (buffer, &iter);
+            gtk_text_buffer_select_range (buffer, &iter, &iter);
+          }
+          gtk_text_buffer_end_user_action (buffer);
+
+          view->column_mode_anchor_line = first_line;
+          view->column_mode_caret_line = last_line;
+          view->column_mode_anchor_column = left_column;
+          view->column_mode_caret_column = left_column;
+          view->column_mode_rectangle_active = TRUE;
+
+          mousepad_view_scroll_to_cursor (view);
+          return;
+        }
+    }
 
   /* override only GTK_DELETE_PARAGRAPHS to make "win.edit.delete-line" work as expected */
   if (type == GTK_DELETE_PARAGRAPHS)
@@ -538,6 +1619,14 @@ mousepad_view_delete_from_cursor (GtkTextView *text_view,
 static void
 mousepad_view_paste_clipboard (GtkTextView *text_view)
 {
+  MousepadView *view = MOUSEPAD_VIEW (text_view);
+
+  if (view->column_mode)
+    {
+      mousepad_view_custom_paste (view, NULL);
+      return;
+    }
+
   /* let GTK do the main job */
   GTK_TEXT_VIEW_CLASS (mousepad_view_parent_class)->paste_clipboard (text_view);
 
@@ -706,8 +1795,26 @@ mousepad_view_move_words (GtkSourceView *source_view,
 static void
 mousepad_view_redo (GtkSourceView *source_view)
 {
+  MousepadView *view = MOUSEPAD_VIEW (source_view);
+  GtkTextBuffer *buffer;
+  GtkTextIter iter;
+
+  view->column_mode_suspended = TRUE;
+
   /* let GSV do the main job */
   GTK_SOURCE_VIEW_CLASS (mousepad_view_parent_class)->redo (source_view);
+
+  view->column_mode_suspended = FALSE;
+
+  buffer = mousepad_view_get_buffer (view);
+  gtk_text_buffer_get_iter_at_mark (buffer, &iter, gtk_text_buffer_get_insert (buffer));
+  view->column_mode_anchor_line = gtk_text_iter_get_line (&iter);
+  view->column_mode_caret_line = view->column_mode_anchor_line;
+  view->column_mode_anchor_column = mousepad_util_get_real_line_offset (&iter);
+  view->column_mode_caret_column = view->column_mode_anchor_column;
+  view->column_mode_rectangle_active = FALSE;
+  gtk_text_buffer_select_range (buffer, &iter, &iter);
+  gtk_widget_queue_draw (GTK_WIDGET (view));
 
   /* scroll to cursor in our way */
   mousepad_view_scroll_to_cursor (MOUSEPAD_VIEW (source_view));
@@ -718,8 +1825,26 @@ mousepad_view_redo (GtkSourceView *source_view)
 static void
 mousepad_view_undo (GtkSourceView *source_view)
 {
+  MousepadView *view = MOUSEPAD_VIEW (source_view);
+  GtkTextBuffer *buffer;
+  GtkTextIter iter;
+
+  view->column_mode_suspended = TRUE;
+
   /* let GSV do the main job */
   GTK_SOURCE_VIEW_CLASS (mousepad_view_parent_class)->undo (source_view);
+
+  view->column_mode_suspended = FALSE;
+
+  buffer = mousepad_view_get_buffer (view);
+  gtk_text_buffer_get_iter_at_mark (buffer, &iter, gtk_text_buffer_get_insert (buffer));
+  view->column_mode_anchor_line = gtk_text_iter_get_line (&iter);
+  view->column_mode_caret_line = view->column_mode_anchor_line;
+  view->column_mode_anchor_column = mousepad_util_get_real_line_offset (&iter);
+  view->column_mode_caret_column = view->column_mode_anchor_column;
+  view->column_mode_rectangle_active = FALSE;
+  gtk_text_buffer_select_range (buffer, &iter, &iter);
+  gtk_widget_queue_draw (GTK_WIDGET (view));
 
   /* scroll to cursor in our way */
   mousepad_view_scroll_to_cursor (MOUSEPAD_VIEW (source_view));
@@ -1050,7 +2175,10 @@ mousepad_view_custom_paste (MousepadView *view,
 
       /* leave when the text is null */
       if (G_UNLIKELY (text == NULL))
-        return;
+        {
+          gtk_text_buffer_end_user_action (buffer);
+          return;
+        }
 
       /* chop the string into pieces */
       pieces = g_strsplit (text, "\n", -1);
@@ -1418,9 +2546,48 @@ mousepad_view_get_selection_length (MousepadView *view)
   /* get the text buffer */
   buffer = mousepad_view_get_buffer (view);
 
-  /* calculate the selection length from the iter offset (absolute) */
-  if (gtk_text_buffer_get_selection_bounds (buffer, &start, &end))
-    length = ABS (gtk_text_iter_get_offset (&end) - gtk_text_iter_get_offset (&start));
+  if (view->column_mode)
+    {
+      gint first_line, last_line, left_column, right_column;
+      gboolean has_width;
+
+      if (mousepad_view_column_mode_get_bounds (view,
+                                                &first_line,
+                                                &last_line,
+                                                &left_column,
+                                                &right_column,
+                                                &has_width)
+          && has_width)
+        {
+          gint line;
+
+          for (line = first_line; line <= last_line; ++line)
+            {
+              GtkTextIter line_iter, left_iter, right_iter;
+
+              gtk_text_buffer_get_iter_at_line (buffer, &line_iter, line);
+              left_iter = line_iter;
+              right_iter = line_iter;
+              mousepad_util_set_real_line_offset (&left_iter, left_column, FALSE);
+              mousepad_util_set_real_line_offset (&right_iter, right_column, FALSE);
+
+              if (gtk_text_iter_compare (&left_iter, &right_iter) < 0)
+                {
+                  gchar *slice = gtk_text_buffer_get_text (buffer, &left_iter, &right_iter, TRUE);
+                  if (slice != NULL)
+                    {
+                      length += (gint) g_utf8_strlen (slice, -1);
+                      g_free (slice);
+                    }
+                }
+            }
+        }
+    }
+  else if (gtk_text_buffer_get_selection_bounds (buffer, &start, &end))
+    {
+      /* calculate the selection length from the iter offset (absolute) */
+      length = ABS (gtk_text_iter_get_offset (&end) - gtk_text_iter_get_offset (&start));
+    }
 
   return length;
 }
@@ -1576,4 +2743,208 @@ mousepad_view_set_match_braces (MousepadView *view,
   view->match_braces = enabled;
 
   mousepad_view_buffer_changed (view, NULL, NULL);
+}
+
+
+
+static void
+mousepad_view_set_column_mode (MousepadView *view,
+                               gboolean enabled)
+{
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+
+  view->column_mode = enabled;
+  if (!enabled)
+    view->column_mode_rectangle_active = FALSE;
+  mousepad_view_update_column_mode_cursor (view);
+  gtk_widget_queue_draw (GTK_WIDGET (view));
+}
+
+
+
+static void
+mousepad_view_column_mode_draw_overlay (MousepadView *view,
+                                        cairo_t *cr)
+{
+  GtkTextBuffer *buffer;
+  gint first_line, last_line, left_column, right_column;
+  GdkRGBA color;
+  GtkStyleContext *style;
+  gint line;
+
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+
+  if (!view->column_mode)
+    return;
+
+  buffer = mousepad_view_get_buffer (view);
+  if (!mousepad_view_column_mode_get_bounds (view,
+                                             &first_line,
+                                             &last_line,
+                                             &left_column,
+                                             &right_column,
+                                             NULL))
+    return;
+
+  style = gtk_widget_get_style_context (GTK_WIDGET (view));
+
+  gtk_style_context_get_background_color (style, GTK_STATE_FLAG_SELECTED, &color);
+  cairo_save (cr);
+  cairo_set_source_rgba (cr, color.red, color.green, color.blue, 0.35);
+
+  for (line = first_line; line <= last_line; ++line)
+    {
+      GtkTextIter line_iter, left_iter, right_iter;
+      GdkRectangle left_loc, right_loc;
+      gint x1, y1, x2, y2;
+      gint x, y, width, height;
+
+      gtk_text_buffer_get_iter_at_line (buffer, &line_iter, line);
+      left_iter = line_iter;
+      right_iter = line_iter;
+      mousepad_util_set_real_line_offset (&left_iter, left_column, FALSE);
+      mousepad_util_set_real_line_offset (&right_iter, right_column, FALSE);
+
+      gtk_text_view_get_iter_location (GTK_TEXT_VIEW (view), &left_iter, &left_loc);
+      gtk_text_view_get_iter_location (GTK_TEXT_VIEW (view), &right_iter, &right_loc);
+
+      gtk_text_view_buffer_to_window_coords (GTK_TEXT_VIEW (view), GTK_TEXT_WINDOW_WIDGET,
+                                             left_loc.x, left_loc.y, &x1, &y1);
+      gtk_text_view_buffer_to_window_coords (GTK_TEXT_VIEW (view), GTK_TEXT_WINDOW_WIDGET,
+                                             right_loc.x, right_loc.y, &x2, &y2);
+
+      x = MIN (x1, x2);
+      y = y1;
+      width = ABS (x2 - x1);
+      height = MAX (left_loc.height, 1);
+
+      if (width == 0)
+        {
+          width = 2;
+          x -= 1;
+        }
+
+      cairo_rectangle (cr, x, y, width, height);
+      cairo_fill (cr);
+    }
+
+  cairo_restore (cr);
+}
+
+
+
+static gint
+mousepad_view_column_mode_visual_column (MousepadView *view,
+                                         GtkTextIter *iter,
+                                         gint buffer_x)
+{
+  gint column;
+
+  g_return_val_if_fail (MOUSEPAD_IS_VIEW (view), 0);
+  g_return_val_if_fail (iter != NULL, 0);
+
+  column = mousepad_util_get_real_line_offset (iter);
+
+  if (gtk_text_iter_ends_line (iter))
+    {
+      GdkRectangle end_loc;
+
+      gtk_text_view_get_iter_location (GTK_TEXT_VIEW (view), iter, &end_loc);
+      if (buffer_x > end_loc.x)
+        {
+          PangoLayout *layout;
+          gint char_width = 1;
+          gint extra_pixels;
+
+          layout = gtk_widget_create_pango_layout (GTK_WIDGET (view), " ");
+          if (layout != NULL)
+            {
+              pango_layout_get_pixel_size (layout, &char_width, NULL);
+              g_object_unref (layout);
+            }
+
+          if (char_width <= 0)
+            char_width = 1;
+
+          extra_pixels = buffer_x - end_loc.x;
+          column += (extra_pixels + char_width - 1) / char_width;
+        }
+    }
+
+  return MAX (0, column);
+}
+
+
+
+static void
+mousepad_view_column_mode_pad_line_to_column (MousepadView *view,
+                                              gint line,
+                                              gint column)
+{
+  GtkTextBuffer *buffer;
+  GtkTextIter line_iter;
+  GtkTextIter end_iter;
+  gint end_column;
+
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+
+  if (column <= 0)
+    return;
+
+  buffer = mousepad_view_get_buffer (view);
+  gtk_text_buffer_get_iter_at_line (buffer, &line_iter, line);
+  end_iter = line_iter;
+
+  if (!gtk_text_iter_ends_line (&end_iter))
+    gtk_text_iter_forward_to_line_end (&end_iter);
+
+  end_column = mousepad_util_get_real_line_offset (&end_iter);
+  if (end_column < column)
+    {
+      gchar *padding = g_strnfill (column - end_column, ' ');
+
+      if (padding != NULL)
+        {
+          gtk_text_buffer_insert (buffer, &end_iter, padding, -1);
+          g_free (padding);
+        }
+    }
+}
+
+
+
+static void
+mousepad_view_update_column_mode_cursor (MousepadView *view)
+{
+  GtkTextWindowType window_types[] = {
+    GTK_TEXT_WINDOW_TEXT,
+    GTK_TEXT_WINDOW_LEFT,
+    GTK_TEXT_WINDOW_RIGHT,
+    GTK_TEXT_WINDOW_TOP,
+    GTK_TEXT_WINDOW_BOTTOM
+  };
+  GdkCursor *cursor = NULL;
+  GdkDisplay *display;
+  guint i;
+
+  g_return_if_fail (MOUSEPAD_IS_VIEW (view));
+
+  if (!gtk_widget_get_realized (GTK_WIDGET (view)))
+    return;
+
+  display = gtk_widget_get_display (GTK_WIDGET (view));
+  if (view->column_mode)
+    cursor = gdk_cursor_new_from_name (display, "crosshair");
+
+  for (i = 0; i < G_N_ELEMENTS (window_types); ++i)
+    {
+      GdkWindow *window;
+
+      window = gtk_text_view_get_window (GTK_TEXT_VIEW (view), window_types[i]);
+      if (window != NULL)
+        gdk_window_set_cursor (window, cursor);
+    }
+
+  if (cursor != NULL)
+    g_object_unref (cursor);
 }
