@@ -18,6 +18,10 @@
 #include "mousepad-settings.h"
 #include "mousepad-util.h"
 
+#ifdef G_OS_WIN32
+#include <glib/gwin32.h>
+#endif
+
 #ifdef HAVE_MATH_H
 #include <math.h>
 #endif
@@ -643,7 +647,8 @@ mousepad_util_get_save_location (const gchar *relpath,
                           dirname, filename);
 
               /* don't return a filename, to avoid problems */
-              g_clear_pointer (&filename, g_free);
+              g_free (filename);
+              filename = NULL;
             }
 
           /* cleanup */
@@ -652,7 +657,8 @@ mousepad_util_get_save_location (const gchar *relpath,
       else
         {
           /* cleanup */
-          g_clear_pointer (&filename, g_free);
+          g_free (filename);
+          filename = NULL;
         }
     }
 
@@ -801,6 +807,253 @@ mousepad_util_get_style_schemes (void)
     }
 
   return list;
+}
+
+
+
+static gboolean
+mousepad_util_dir_contains_xml (const gchar *directory)
+{
+  GDir *dir;
+  const gchar *name;
+
+  if (directory == NULL || !g_file_test (directory, G_FILE_TEST_IS_DIR))
+    return FALSE;
+
+  dir = g_dir_open (directory, 0, NULL);
+  if (dir == NULL)
+    return FALSE;
+
+  while ((name = g_dir_read_name (dir)) != NULL)
+    {
+      if (g_str_has_suffix (name, ".xml"))
+        {
+          g_dir_close (dir);
+          return TRUE;
+        }
+    }
+
+  g_dir_close (dir);
+  return FALSE;
+}
+
+
+
+static gboolean
+mousepad_util_dir_contains_language_specs (const gchar *directory)
+{
+  GDir *dir;
+  const gchar *name;
+  gboolean found_spec = FALSE;
+  gchar *schema_path;
+  gboolean has_schema;
+
+  if (directory == NULL || !g_file_test (directory, G_FILE_TEST_IS_DIR))
+    return FALSE;
+
+  dir = g_dir_open (directory, 0, NULL);
+  if (dir == NULL)
+    return FALSE;
+
+  while ((name = g_dir_read_name (dir)) != NULL)
+    {
+      if (g_str_has_suffix (name, ".lang") || g_str_has_suffix (name, ".xml"))
+        found_spec = TRUE;
+    }
+
+  g_dir_close (dir);
+
+  if (!found_spec)
+    return FALSE;
+
+  schema_path = g_build_filename (directory, "language2.rng", NULL);
+  has_schema = g_file_test (schema_path, G_FILE_TEST_IS_REGULAR);
+  g_free (schema_path);
+
+  return has_schema;
+}
+
+
+
+static void
+mousepad_util_add_search_path (GPtrArray *paths,
+                               const gchar *path)
+{
+  guint i;
+
+  g_return_if_fail (paths != NULL);
+
+  if (path == NULL || *path == '\0')
+    return;
+
+  for (i = 0; i < paths->len; i++)
+    if (g_strcmp0 (path, g_ptr_array_index (paths, i)) == 0)
+        return;
+
+  g_ptr_array_add (paths, g_strdup (path));
+}
+
+
+
+void
+mousepad_util_load_external_style_schemes (void)
+{
+  GtkSourceStyleSchemeManager *manager;
+  const gchar *const *search_paths;
+  const gchar *path_env;
+  GPtrArray *paths;
+  gchar *install_dir;
+  gchar *themes_dir;
+  gchar *current_dir;
+  gchar **dirs;
+  gchar **iter;
+
+  manager = gtk_source_style_scheme_manager_get_default ();
+  search_paths = gtk_source_style_scheme_manager_get_search_path (manager);
+  paths = g_ptr_array_new_with_free_func (g_free);
+
+  if (search_paths != NULL)
+    while (*search_paths)
+      {
+        mousepad_util_add_search_path (paths, *search_paths);
+        search_paths++;
+      }
+
+  path_env = g_getenv ("MOUSEPAD_THEME_DIRECTORY");
+  if (path_env != NULL && *path_env != '\0')
+    {
+      dirs = g_strsplit (path_env, G_SEARCHPATH_SEPARATOR_S, 0);
+      for (iter = dirs; iter != NULL && *iter != NULL; iter++)
+        if (mousepad_util_dir_contains_xml (*iter))
+          mousepad_util_add_search_path (paths, *iter);
+      g_strfreev (dirs);
+    }
+
+#ifdef G_OS_WIN32
+  install_dir = g_win32_get_package_installation_directory_of_module (NULL);
+  if (install_dir != NULL)
+    {
+      themes_dir = g_build_filename (install_dir, "..", "themes", NULL);
+      if (mousepad_util_dir_contains_xml (themes_dir))
+        mousepad_util_add_search_path (paths, themes_dir);
+      g_free (themes_dir);
+
+      themes_dir = g_build_filename (install_dir, "themes", NULL);
+      if (mousepad_util_dir_contains_xml (themes_dir))
+        mousepad_util_add_search_path (paths, themes_dir);
+      g_free (themes_dir);
+
+      g_free (install_dir);
+    }
+#endif
+
+  current_dir = g_get_current_dir ();
+  if (current_dir != NULL)
+    {
+      themes_dir = g_build_filename (current_dir, "themes", NULL);
+      if (mousepad_util_dir_contains_xml (themes_dir))
+        mousepad_util_add_search_path (paths, themes_dir);
+      g_free (themes_dir);
+
+      themes_dir = g_build_filename (current_dir, "build-msvc", "themes", NULL);
+      if (mousepad_util_dir_contains_xml (themes_dir))
+        mousepad_util_add_search_path (paths, themes_dir);
+      g_free (themes_dir);
+
+      g_free (current_dir);
+    }
+
+  g_ptr_array_add (paths, NULL);
+  gtk_source_style_scheme_manager_set_search_path (manager, (gchar **) paths->pdata);
+  gtk_source_style_scheme_manager_force_rescan (manager);
+  g_ptr_array_free (paths, TRUE);
+}
+
+
+
+void
+mousepad_util_load_external_language_specs (void)
+{
+  GtkSourceLanguageManager *manager;
+  const gchar *const *search_paths;
+  const gchar *path_env;
+  gchar *path_setting;
+  GPtrArray *paths;
+  gchar *install_dir;
+  gchar *specs_dir;
+  gchar *current_dir;
+  gchar **dirs;
+  gchar **iter;
+
+  manager = gtk_source_language_manager_get_default ();
+  search_paths = gtk_source_language_manager_get_search_path (manager);
+  paths = g_ptr_array_new_with_free_func (g_free);
+
+  if (search_paths != NULL)
+    while (*search_paths)
+      {
+        mousepad_util_add_search_path (paths, *search_paths);
+        search_paths++;
+      }
+
+  path_env = g_getenv ("MOUSEPAD_LANGUAGE_SPEC_DIRECTORY");
+  if (path_env != NULL && *path_env != '\0')
+    {
+      dirs = g_strsplit (path_env, G_SEARCHPATH_SEPARATOR_S, 0);
+      for (iter = dirs; iter != NULL && *iter != NULL; iter++)
+        if (mousepad_util_dir_contains_language_specs (*iter))
+          mousepad_util_add_search_path (paths, *iter);
+      g_strfreev (dirs);
+    }
+
+  path_setting = MOUSEPAD_SETTING_GET_STRING (LANGUAGE_SPECS_DIRECTORY);
+  if (path_setting != NULL && *path_setting != '\0')
+    {
+      dirs = g_strsplit (path_setting, G_SEARCHPATH_SEPARATOR_S, 0);
+      for (iter = dirs; iter != NULL && *iter != NULL; iter++)
+        if (mousepad_util_dir_contains_language_specs (*iter))
+          mousepad_util_add_search_path (paths, *iter);
+      g_strfreev (dirs);
+    }
+  g_free (path_setting);
+
+#ifdef G_OS_WIN32
+  install_dir = g_win32_get_package_installation_directory_of_module (NULL);
+  if (install_dir != NULL)
+    {
+      specs_dir = g_build_filename (install_dir, "..", "language-specs", NULL);
+      if (mousepad_util_dir_contains_language_specs (specs_dir))
+        mousepad_util_add_search_path (paths, specs_dir);
+      g_free (specs_dir);
+
+      specs_dir = g_build_filename (install_dir, "language-specs", NULL);
+      if (mousepad_util_dir_contains_language_specs (specs_dir))
+        mousepad_util_add_search_path (paths, specs_dir);
+      g_free (specs_dir);
+
+      g_free (install_dir);
+    }
+#endif
+
+  current_dir = g_get_current_dir ();
+  if (current_dir != NULL)
+    {
+      specs_dir = g_build_filename (current_dir, "language-specs", NULL);
+      if (mousepad_util_dir_contains_language_specs (specs_dir))
+        mousepad_util_add_search_path (paths, specs_dir);
+      g_free (specs_dir);
+
+      specs_dir = g_build_filename (current_dir, "build-msvc", "language-specs", NULL);
+      if (mousepad_util_dir_contains_language_specs (specs_dir))
+        mousepad_util_add_search_path (paths, specs_dir);
+      g_free (specs_dir);
+
+      g_free (current_dir);
+    }
+
+  g_ptr_array_add (paths, NULL);
+  gtk_source_language_manager_set_search_path (manager, (gchar **) paths->pdata);
+  g_ptr_array_free (paths, TRUE);
 }
 
 
