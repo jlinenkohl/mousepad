@@ -84,6 +84,7 @@ G_BEGIN_DECLS
 #define MOUSEPAD_SETTING_SEARCH_WRAP_AROUND "state.search.wrap-around"
 #define MOUSEPAD_SETTING_SEARCH_MATCH_CASE "state.search.match-case"
 #define MOUSEPAD_SETTING_SEARCH_ENABLE_REGEX "state.search.enable-regex"
+#define MOUSEPAD_SETTING_SEARCH_REGEX_MULTILINE "state.search.regex-multiline"
 #define MOUSEPAD_SETTING_SEARCH_MATCH_WHOLE_WORD "state.search.match-whole-word"
 #define MOUSEPAD_SETTING_SEARCH_REPLACE_ALL "state.search.replace-all"
 #define MOUSEPAD_SETTING_SEARCH_REPLACE_ALL_LOCATION "state.search.replace-all-location"

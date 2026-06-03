@@ -245,7 +245,7 @@ mousepad_replace_dialog_post_init (MousepadReplaceDialog *dialog)
 static void
 mousepad_replace_dialog_init (MousepadReplaceDialog *dialog)
 {
-  GtkWidget *button, *area, *vbox, *hbox, *combo, *label, *check;
+  GtkWidget *button, *area, *vbox, *hbox, *combo, *label, *check, *regex_check;
   GtkSizeGroup *size_group;
 
   /* we will complete initialization when the parent window is set */
@@ -386,13 +386,23 @@ mousepad_replace_dialog_init (MousepadReplaceDialog *dialog)
                                         check, "active");
 
   /* enable regex search */
-  check = gtk_check_button_new_with_mnemonic (_("Regular e_xpression"));
+  regex_check = check = gtk_check_button_new_with_mnemonic (_("Regular e_xpression"));
   gtk_widget_set_margin_start (check, 6);
   gtk_widget_set_margin_end (check, 6);
   gtk_box_pack_start (GTK_BOX (vbox), check, FALSE, FALSE, 0);
 
   mousepad_replace_dialog_bind_setting (dialog, MOUSEPAD_SETTING_SEARCH_ENABLE_REGEX,
                                         check, "active");
+
+  /* regex multiline anchors */
+  check = gtk_check_button_new_with_mnemonic (_("Regex _multiline anchors"));
+  gtk_widget_set_margin_start (check, 24);
+  gtk_widget_set_margin_end (check, 6);
+  gtk_box_pack_start (GTK_BOX (vbox), check, FALSE, FALSE, 0);
+
+  mousepad_replace_dialog_bind_setting (dialog, MOUSEPAD_SETTING_SEARCH_REGEX_MULTILINE,
+                                        check, "active");
+  g_object_bind_property (regex_check, "active", check, "sensitive", G_BINDING_SYNC_CREATE);
 
   /* horizontal box for the replace all options */
   hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 8);

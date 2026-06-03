@@ -220,7 +220,7 @@ mousepad_search_bar_post_init (MousepadSearchBar *bar)
 static void
 mousepad_search_bar_init (MousepadSearchBar *bar)
 {
-  GtkWidget *widget, *box, *menu_item;
+  GtkWidget *widget, *box, *menu_item, *regex_widget;
   GtkToolItem *item;
   GtkCssProvider *provider;
   const gchar *css_string;
@@ -311,7 +311,7 @@ mousepad_search_bar_init (MousepadSearchBar *bar)
                           G_BINDING_BIDIRECTIONAL | G_BINDING_SYNC_CREATE);
 
   /* check button for enabling regex, including the proxy menu item */
-  widget = gtk_check_button_new_with_mnemonic (_("Regular e_xpression"));
+  regex_widget = widget = gtk_check_button_new_with_mnemonic (_("Regular e_xpression"));
   MOUSEPAD_SETTING_BIND (SEARCH_ENABLE_REGEX, widget, "active", G_SETTINGS_BIND_DEFAULT);
   g_signal_connect_swapped (widget, "toggled", G_CALLBACK (mousepad_search_bar_setting_changed), bar);
 
@@ -321,6 +321,21 @@ mousepad_search_bar_init (MousepadSearchBar *bar)
 
   menu_item = gtk_check_menu_item_new_with_mnemonic (_("Regular e_xpression"));
   gtk_tool_item_set_proxy_menu_item (item, "enable-regex", menu_item);
+  g_object_bind_property (widget, "active", menu_item, "active",
+                          G_BINDING_BIDIRECTIONAL | G_BINDING_SYNC_CREATE);
+
+  /* check button for multiline regex anchors, including the proxy menu item */
+  widget = gtk_check_button_new_with_mnemonic (_("Regex _multiline anchors"));
+  MOUSEPAD_SETTING_BIND (SEARCH_REGEX_MULTILINE, widget, "active", G_SETTINGS_BIND_DEFAULT);
+  g_object_bind_property (regex_widget, "active", widget, "sensitive", G_BINDING_SYNC_CREATE);
+  g_signal_connect_swapped (widget, "toggled", G_CALLBACK (mousepad_search_bar_setting_changed), bar);
+
+  item = gtk_tool_item_new ();
+  gtk_container_add (GTK_CONTAINER (item), widget);
+  gtk_toolbar_insert (GTK_TOOLBAR (bar), item, -1);
+
+  menu_item = gtk_check_menu_item_new_with_mnemonic (_("Regex _multiline anchors"));
+  gtk_tool_item_set_proxy_menu_item (item, "regex-multiline", menu_item);
   g_object_bind_property (widget, "active", menu_item, "active",
                           G_BINDING_BIDIRECTIONAL | G_BINDING_SYNC_CREATE);
 
