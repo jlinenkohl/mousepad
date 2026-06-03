@@ -546,7 +546,7 @@
       </description>
     </key>
     <key name="regex-multiline" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Regex multiline anchors</summary>
       <description>
         When true regular expression anchors ^ and $ match line boundaries,
