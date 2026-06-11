@@ -647,8 +647,7 @@ mousepad_util_get_save_location (const gchar *relpath,
                           dirname, filename);
 
               /* don't return a filename, to avoid problems */
-              g_free (filename);
-              filename = NULL;
+              g_clear_pointer (&filename, g_free);
             }
 
           /* cleanup */
@@ -657,8 +656,7 @@ mousepad_util_get_save_location (const gchar *relpath,
       else
         {
           /* cleanup */
-          g_free (filename);
-          filename = NULL;
+          g_clear_pointer (&filename, g_free);
         }
     }
 

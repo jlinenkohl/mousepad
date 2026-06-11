@@ -754,7 +754,7 @@ mousepad_window_class_init (MousepadWindowClass *klass)
                                                          "SearchWidgetVisible",
                                                          "At least one search widget is visible or not",
                                                          FALSE,
-                                                         G_PARAM_READWRITE));
+                                                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -810,8 +810,7 @@ mousepad_window_finalize (GObject *object)
   /* free last save location if needed */
   if (last_save_location_ref_count == 0 && last_save_location != NULL)
     {
-      g_object_unref (last_save_location);
-      last_save_location = NULL;
+      g_clear_object (&last_save_location);
     }
 
   (*G_OBJECT_CLASS (mousepad_window_parent_class)->finalize) (object);
