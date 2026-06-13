@@ -10,6 +10,8 @@ settings locations.
 
 Options:
   --build-dir DIR   Build directory (default: build-wsl)
+  --profile NAME    Isolated profile name (default: dev)
+  --system-profile  Do not override XDG config/data locations
   --configure       Force meson setup --reconfigure before compile
   --clean           Remove build dir before configure
   --no-libm         Do not pass -Dc_link_args=-lm during setup/reconfigure
@@ -24,6 +26,8 @@ EOF
 }
 
 BUILD_DIR="build-wsl"
+PROFILE="dev"
+SYSTEM_PROFILE=0
 FORCE_CONFIGURE=0
 CLEAN_BUILD=0
 USE_LIBM=1
@@ -39,6 +43,18 @@ while (($#)); do
       fi
       BUILD_DIR="$2"
       shift 2
+      ;;
+    --profile)
+      if (($# < 2)); then
+        echo "Error: --profile requires a value" >&2
+        exit 2
+      fi
+      PROFILE="$2"
+      shift 2
+      ;;
+    --system-profile)
+      SYSTEM_PROFILE=1
+      shift
       ;;
     --configure)
       FORCE_CONFIGURE=1
@@ -78,7 +94,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_PATH="$REPO_ROOT/$BUILD_DIR"
 SCHEMA_SRC="$REPO_ROOT/mousepad/org.xfce.mousepad.gschema.xml"
 SCHEMA_DIR="$BUILD_PATH/runtime-schemas"
-CONFIG_HOME="$BUILD_PATH/config-home"
+PROFILE_ROOT="$BUILD_PATH/profiles/$PROFILE"
+CONFIG_HOME="$PROFILE_ROOT/config"
+DATA_HOME="$PROFILE_ROOT/data"
 BIN_PATH="$BUILD_PATH/mousepad/mousepad"
 
 if ! command -v meson >/dev/null 2>&1; then
@@ -122,7 +140,9 @@ mkdir -p "$SCHEMA_DIR"
 cp "$SCHEMA_SRC" "$SCHEMA_DIR/org.xfce.mousepad.gschema.xml"
 glib-compile-schemas "$SCHEMA_DIR" >/dev/null
 
-mkdir -p "$CONFIG_HOME"
+if (( ! SYSTEM_PROFILE )); then
+  mkdir -p "$CONFIG_HOME" "$DATA_HOME"
+fi
 
 if ((RUN_AFTER_BUILD)); then
   if [[ ! -x "$BIN_PATH" ]]; then
@@ -130,14 +150,23 @@ if ((RUN_AFTER_BUILD)); then
     exit 1
   fi
 
-  export XDG_CONFIG_HOME="$CONFIG_HOME"
+  if (( ! SYSTEM_PROFILE )); then
+    export XDG_CONFIG_HOME="$CONFIG_HOME"
+    export XDG_DATA_HOME="$DATA_HOME"
+  fi
   if [[ -n "${GSETTINGS_SCHEMA_DIR:-}" ]]; then
     export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR:$GSETTINGS_SCHEMA_DIR"
   else
     export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR"
   fi
 
-  echo "Using XDG_CONFIG_HOME=$XDG_CONFIG_HOME"
+  if (( SYSTEM_PROFILE )); then
+    echo "Using system profile (no XDG overrides)"
+  else
+    echo "Using profile '$PROFILE'"
+    echo "Using XDG_CONFIG_HOME=$XDG_CONFIG_HOME"
+    echo "Using XDG_DATA_HOME=$XDG_DATA_HOME"
+  fi
   echo "Using GSETTINGS_SCHEMA_DIR=$GSETTINGS_SCHEMA_DIR"
 
   exec "$BIN_PATH" "${APP_ARGS[@]}"
@@ -145,4 +174,10 @@ fi
 
 echo "Build complete."
 echo "Schema cache: $SCHEMA_DIR/gschemas.compiled"
-echo "Config home: $CONFIG_HOME"
+if (( SYSTEM_PROFILE )); then
+  echo "Profile: system"
+else
+  echo "Profile: $PROFILE"
+  echo "Config home: $CONFIG_HOME"
+  echo "Data home: $DATA_HOME"
+fi

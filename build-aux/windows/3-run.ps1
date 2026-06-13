@@ -2,7 +2,9 @@ param(
   [string]$BuildDir = "build-msvc",
   [string]$GtkPrefix = "Q:\gtk3",
   [string]$GettextPrefix = "$env:LOCALAPPDATA\Programs\gettext-iconv",
+  [string]$Profile = "dev",
   [string]$ConfigHome,
+  [switch]$SystemProfile,
   [switch]$Wait
 )
 
@@ -21,11 +23,28 @@ if (-not (Test-Path $exePath)) {
   throw "Executable not found at '$exePath'. Run build-aux/windows/2-compile.ps1 first."
 }
 
-if (-not $ConfigHome) {
-  $ConfigHome = Join-Path $repoRoot "$BuildDir\config-home"
+if ($SystemProfile -and $ConfigHome) {
+  throw "Do not combine -SystemProfile with -ConfigHome."
 }
-New-Item -ItemType Directory -Force -Path $ConfigHome | Out-Null
-$env:XDG_CONFIG_HOME = $ConfigHome
+
+$DataHome = $null
+if (-not $SystemProfile) {
+  if (-not $ConfigHome) {
+    $profileRoot = Join-Path $repoRoot "$BuildDir\profiles\$Profile"
+    $ConfigHome = Join-Path $profileRoot 'config'
+  }
+
+  if (-not $profileRoot) {
+    $profileRoot = Split-Path -Parent $ConfigHome
+  }
+
+  $DataHome = Join-Path $profileRoot 'data'
+
+  New-Item -ItemType Directory -Force -Path $ConfigHome | Out-Null
+  New-Item -ItemType Directory -Force -Path $DataHome | Out-Null
+  $env:XDG_CONFIG_HOME = $ConfigHome
+  $env:XDG_DATA_HOME = $DataHome
+}
 
 $gtkBin = Join-Path $GtkPrefix 'bin'
 $gtkShare = Join-Path $GtkPrefix 'share'
@@ -82,7 +101,14 @@ if ((Test-Path $schemaSrc) -and (Test-Path $glibCompileSchemas)) {
 }
 
 Write-Host "Launching $exePath"
-Write-Host "Using XDG_CONFIG_HOME=$ConfigHome"
+if ($SystemProfile) {
+  Write-Host "Using system profile (no XDG overrides)"
+}
+else {
+  Write-Host "Using profile '$Profile'"
+  Write-Host "Using XDG_CONFIG_HOME=$ConfigHome"
+  Write-Host "Using XDG_DATA_HOME=$DataHome"
+}
 if ($Wait) {
   & $exePath
   $exitCode = $LASTEXITCODE

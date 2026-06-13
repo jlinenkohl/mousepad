@@ -139,6 +139,19 @@ For runtime from a non-developer shell, use:
 ./build-aux/windows/3-run.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk
 ```
 
+By default, this now uses system settings/data locations (no XDG overrides).
+For isolated development settings, pass a profile name:
+
+```powershell
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk -Profile dev
+```
+
+For explicitly system-profile testing (same behavior as default):
+
+```powershell
+./build-aux/windows/3-run.ps1 -BuildDir build-msvc -GtkPrefix C:/gtk -SystemProfile
+```
+
 The run helper prepares `PATH` for GTK runtime DLLs and compiles/uses a local
 GSettings schema cache for non-installed development runs.
 It also sets `MOUSEPAD_PLUGIN_DIRECTORY` to `<builddir>/plugins` when present,
@@ -164,6 +177,17 @@ For leaner release packaging, stage only recursive PE dependencies
 ```
 
 This creates `build-msvc/mousepad/run-mousepad.cmd` for self-contained launch.
+`run-mousepad.cmd` defaults to system profile. To run isolated, set
+`MOUSEPAD_PROFILE` before launching:
+
+```cmd
+set MOUSEPAD_PROFILE=dev
+run-mousepad.cmd
+```
+
+Isolated profiles use `<builddir>/profiles/<name>/config` and
+`<builddir>/profiles/<name>/data`.
+
 When `themes/*.xml` exists in the repository root, they are also staged to
 `<builddir>/themes` automatically.
 When `language-specs/*.{lang,xml}` exists in the repository root, they are
